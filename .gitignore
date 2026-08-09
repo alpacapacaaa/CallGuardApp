@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# SwiftPM / Xcode
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+
+# Python (ml/ 격리 — AGENTS.md §4)
+__pycache__/
+*.pyc
+.venv/
+
+# G5: 실데이터셋은 커밋 금지 — 합성 픽스처만 Tests/Fixtures/에 커밋
+ml/datasets/

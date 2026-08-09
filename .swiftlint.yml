@@ -1,0 +1,9 @@
+# CallGuard SwiftLint 설정 (P0-T1)
+# trailing_comma: swiftformat 기본(trailing comma 추가)과 정합 유지
+excluded:
+  - .build
+  - .swiftpm
+  - ml
+
+trailing_comma:
+  mandatory_comma: true

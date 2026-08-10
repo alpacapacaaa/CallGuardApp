@@ -26,6 +26,8 @@ let package = Package(
         .target(name: "Detection", dependencies: ["STT"]),
         .target(name: "AlertPolicy", dependencies: ["Detection"]),
         .target(name: "CallGuardUI", dependencies: ["AlertPolicy"]),
+        // P4-T3: 온보딩 자가 진단 — Capture→STT→Detection→AlertPolicy 전 구간을 FileAudioSource로 재생 검증.
+        .target(name: "Onboarding", dependencies: ["Capture", "STT", "Detection", "AlertPolicy"]),
         .target(
             name: "SessionStore",
             dependencies: ["Session", "Detection", .product(name: "GRDB", package: "GRDB.swift")]
@@ -76,7 +78,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CallGuardSlowTests",
-            dependencies: ["Capture", "STT", "Detection", "TestSupport"]
+            dependencies: ["Capture", "STT", "Detection", "AlertPolicy", "Onboarding", "TestSupport"]
         ),
     ]
 )

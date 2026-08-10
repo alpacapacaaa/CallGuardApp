@@ -1,8 +1,9 @@
 # STATE
 ## 현재 태스크
-P4-T3 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
+P4-T5 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
 ## 완료 태스크
-- [x] P4-T2 (2026-08-11, 커밋 예정 — AlertViewModel+AlertViews(메뉴바/주의배너/위험패널) + RenderUIStates CLI(ImageRenderer→PNG, 신규 의존성 없음). docs/ui/{menubar-none,caution-banner,danger-panel}.png 생성. fast 테스트 4건, ci_fast 전부 통과)
+- [x] P4-T2 (2026-08-11, commit 0601124 — AlertViewModel+AlertViews(메뉴바/주의배너/위험패널) + RenderUIStates CLI(ImageRenderer→PNG, 신규 의존성 없음). docs/ui/{menubar-none,caution-banner,danger-panel}.png 생성. fast 테스트 4건, ci_fast 전부 통과)
+- [x] P4-T3 (2026-08-11, 커밋 예정 — Sources/Onboarding/SelfDiagnosis.swift: FileAudioSource로 내장 샘플(normal-delivery-01.wav) 재생→Capture/STT/Detection/AlertPolicy 4단계 통과 여부 보고. docs/onboarding.md(환경 진단 체크리스트+권한 가이드 링크). slow 통합 테스트 SelfDiagnosisTests 1건 통과(tiny 모델 캐시 재사용, 4.8초)
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
 - [x] P0-T3 (2026-08-10, commit 1a80fb8)

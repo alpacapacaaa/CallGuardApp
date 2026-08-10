@@ -51,4 +51,19 @@ struct AlertPolicyTests {
 
         #expect(policy.update(with: score(0.9, .accountTransfer)) == .danger)
     }
+
+    /// F-S2: dismiss 이력이 로컬 오탐 목록으로 누적된다(순서·중복 포함 보존).
+    @Test func dismissalLogAccumulatesInOrder() {
+        var policy = AlertPolicy()
+        policy.dismiss(category: .threatUrgency)
+        policy.dismiss(category: .accountTransfer)
+        #expect(policy.dismissalLog == [.threatUrgency, .accountTransfer])
+    }
+
+    /// F-S3: low 프리셋은 medium 임계에서 caution이던 값에 반응하지 않는다.
+    @Test func lowSensitivityRequiresHigherScoreToEscalate() {
+        var lowPolicy = AlertPolicy(sensitivity: .low)
+        #expect(lowPolicy.update(with: score(0.6)) == .none)
+        #expect(lowPolicy.update(with: score(0.7)) == .caution)
+    }
 }

@@ -138,25 +138,13 @@ enum CaptureDemo {
     }
 
     static func report(_ error: CaptureError, outputPath: String) -> Int32 {
-        switch error {
-        case .screenCaptureDenied:
-            writeError("""
-            화면녹화 권한이 없습니다.
-            시스템 설정 → 개인 정보 보호 및 보안 → 화면 녹화에서 이 데모를 실행한
-            상위 앱(예: 터미널)을 허용한 뒤 다시 실행하세요. (종료코드 3)
-            """)
-            return 3
-        case .microphoneDenied:
-            writeError("""
-            마이크 권한이 없습니다.
-            시스템 설정 → 개인 정보 보호 및 보안 → 마이크에서 이 데모를 실행한
-            상위 앱(예: 터미널)을 허용한 뒤 다시 실행하세요. (종료코드 4)
-            """)
-            return 4
-        default:
-            writeError("캡처 실패: \(error) (출력 위치: \(outputPath))")
-            return 1
+        // 권한 거부 → 안내 상태(P1-T5, PermissionGuidance): 크래시 없이 조치 안내 후 종료.
+        if let guidance = PermissionGuidance.from(error) {
+            writeError("\(guidance.title)\n\(guidance.instruction) (종료코드 \(guidance.exitCode))")
+            return guidance.exitCode
         }
+        writeError("캡처 실패: \(error) (출력 위치: \(outputPath))")
+        return 1
     }
 
     static func writeError(_ message: String) {

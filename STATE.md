@@ -1,6 +1,6 @@
 # STATE
 ## 현재 태스크
-P1-T4
+P1-T5
 ## 완료 태스크
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
@@ -8,42 +8,39 @@ P1-T4
 - [x] P0-T4 (2026-08-10, commit 7136418)
 - [x] P0-T5 (2026-08-10, commit da8f968)
 - [x] P1-T2 (2026-08-10, commit 2508ac6)
+- [x] P1-T4 (2026-08-10, commit 7a56f62)
 ## 작업 메모 (현재 태스크의 세부 체크리스트)
-P1-T2 완료 체크리스트:
-- [x] VERIFY: git clean, P0-T5 DoD 재실행 통과(wav 10개 + MANIFEST_OK)
-- [x] §9 심볼 검증(SDK 헤더 grep + swiftc -typecheck 프로브): capturesAudio·sampleRate·channelCount·SCContentFilter(display:excludingWindows:)·addStreamOutput(_:type:sampleHandlerQueue:)·startCapture/stopCapture·SCStreamErrorDomain/SCStreamError.userDeclined(-3801) 실존 확인. 함정 3건 실증: ① SCDisplay에 isMain 없음 → CGMainDisplayID() 매칭 ② capturesVideo 속성 없음 ③ width=height=0 구성은 -3812(InvalidParameter)로 거부 → 최소 표면 2×2 + 비디오 출력 미등록이 오디오 전용 구성(G6, STOP 보고 참조)
-- [x] CaptureError 확장: screenCaptureDenied / captureFailed(detail:) / wavWriteFailed(path:)
-- [x] WavWriter(Sources/Capture): PCM16 모노, 44B 헤더, close() 시 RIFF·data 크기 확정, float→Int16 클립 — 버그 1건 수정(FileHandle 기본 오프셋 0 → seekToEnd 필수, 테스트가 검출)
-- [x] ChunkAccumulator(Sources/Capture): 임의 크기 입력 → FileAudioSource.chunkDuration(100ms) AudioChunk 계약 일치, 잔여분 flush
-- [x] SystemAudioEngine + SystemAudioCapture(AudioSource, track=.remote, 48kHz): SCK 오디오 전용 스트림, CMSampleBuffer→모노 float 디코딩(Float32·Int16), 단절·권한거부 → typed error
-- [x] Package.swift: executableTarget CaptureDemo (Capture 의존)
-- [x] CaptureDemo CLI: --seconds·--out, SIGINT 조기 종료, 권한 미부여 시 안내 후 종료코드 3, G1-safe 출력
-- [x] fast 테스트 11건 추가(WavWriter 6 = DoD 자동 판정, ChunkAccumulator 4, 계약 1) — fast 레인 28건 통과
-- [x] 실캡처 검증(에이전트 대리로 운영자 스모크 대체 증빙): 무음 캡처 exit 0 + afinfo "1 ch, 48000 Hz, Int16" / TTS 음성 재생 중 3s 캡처 → peak 24573·RMS 4022(비침묵) 확인
+P1-T4 완료 체크리스트:
+- [x] VERIFY: git clean, P1-T2 DoD(WavWriterTests) 재실행 6/6 통과
+- [x] §9 심볼 검증(SDK 헤더 + typecheck 프로브): AVAudioApplication.shared.recordPermission(.granted/.denied/.undetermined)·requestRecordPermission() async→Bool(macos 14), AVAudioEngine.inputNode·installTap(onBus:bufferSize:format:block:)·floatChannelData 실존 확인. AVAudioEngine.h 명시: input 미가용 시 inputNode 접근은 예외 발생 → 권한 게이트(MicPermission) 선행·포맷 가드 설계
+- [x] CaptureError.microphoneDenied 추가 / AudioTrack.captureFileName 파일명 규약(remote.wav·local.wav)
+- [x] MicAudioCapture(AudioSource, track=.local): async init(권한→허드웨어 포맷 조회, 48kHz 실측)→tap→모노 다운믹스→ChunkAccumulator 100ms, 탭 스레드는 NSLock 보호(오디오 콜백 경계), deinit 엔진 정지 안전망
+- [x] CaptureDemo 통합: --out → --out-dir DIR, 태스크 그룹 듀얼 캡처(파일 수명주기 태스크별 소유), 트랙 태그 불일치 런타임 가드, 종료코드 4(마이크 권한) 추가
+- [x] fast 테스트 3건 추가(TrackTaggingTests: 파일명 매핑·태그 방향·청크 태그 보존) — fast 레인 31건 통과
+- [x] 실캡처 증빙(운영자 스모크 대행): 세션 1회 exit 0 → remote.wav·local.wav 2파일 각 3.9s@48kHz(afinfo "1 ch, 48000 Hz, Int16") / TTS 재생 중 캡처: remote peak 20326·RMS 3739 vs local peak 3179·RMS 608 — 신호 경로별 분리 확인(직접 경로 vs 음향 픽업)
 - [x] swiftformat·swiftlint 0 위반, ./scripts/ci_fast.sh exit 0
 ## 마지막 DoD 실행 결과 (원문)
 ```
-$ swift test --filter WavWriterTests
-✔ Test rejectsMissingDirectory() passed after 0.001 seconds.
-✔ Test appendAfterCloseFails() passed after 0.001 seconds.
-✔ Test writesValidPcm16MonoHeader() passed after 0.001 seconds.
-✔ Test clipsOutOfRangeSamples() passed after 0.001 seconds.
-✔ Test accumulatesAcrossAppends() passed after 0.001 seconds.
-✔ Test roundTripsThroughWavFile() passed after 0.002 seconds.
-✔ Suite WavWriterTests passed after 0.002 seconds.
-✔ Test run with 6 tests in 1 suite passed after 0.002 seconds.
+$ swift test --filter TrackTaggingTests
+✔ Test sourceTrackTagsMatchPipelineDirection() passed after 0.001 seconds.
+✔ Test captureFileNamesAreFixedPerTrack() passed after 0.001 seconds.
+✔ Test accumulatorTagsChunksWithItsTrack() passed after 0.001 seconds.
+✔ Suite TrackTaggingTests passed after 0.001 seconds.
+✔ Test run with 3 tests in 1 suite passed after 0.001 seconds.
+
+$ .build/debug/CaptureDemo --seconds 4 --out-dir /tmp/p1t4-session
+완료: [local] 3.9s (187200프레임 @ 48000Hz) → /tmp/p1t4-session/local.wav
+완료: [remote] 3.9s (187200프레임 @ 48000Hz) → /tmp/p1t4-session/remote.wav
+exit: 0   (세션 1회 → 2파일, afinfo "1 ch, 48000 Hz, Int16" 양쪽 확인)
 
 $ ./scripts/ci_fast.sh
 ==> ci_fast: 전 단계 통과
-exit: 0   (빌드 + fast 레인 28건 + swiftlint 0 위반 + swiftformat 0/29)
+exit: 0   (빌드 + fast 레인 31건 + swiftlint 0 위반 + swiftformat 0/31)
 ```
-보조 확인(참고): `$ CaptureDemo --seconds 3` 실행 exit 0 → afinfo "Data format: 1 ch, 48000 Hz, Int16 / estimated duration: 2.9 sec"
-DoD 운영자 항목("음악 재생 중 CLI 실행 → 재생 확인")은 최종 음악 스모크 대기 — 에이전트는 TTS 합성 음성으로 비침묵 캡처까지 증빙(작업 메모 참조)
 ## 미해결 이슈 / 다음 세션 지시
-- **다음 태스크 P1-T4**(마이크 트랙 캡처): P1-T3(운영자, P1-T1 선행 대기)은 에이전트 수행 불가이므로 큐 규칙상 건너뜀. P1-T4 착수 시: AVAudioEngine input tap → local.wav, 동일 CaptureDemo에 통합(세션 1회에 remote.wav/local.wav 2파일), 트랙 태깅 테스트. 마이크 TCC 권한 미부여 시에도 크래시 없이 안내(종료코드 체계 재사용). 청크 계약(100ms·capturedAt) 유지
+- **다음 태스크 P1-T5 [병렬 가능]**(권한 흐름 조사): docs/permissions.md 작성(TCC 화면녹화·마이크 요청 경로, 거부 시 동작 — P1-T4에서 이미 구현된 종료코드 3·4 안내 흐름 포함) + "권한 미보유 시 크래시 없이 안내 상태 진입" 테스트. 난점: TCC 상태를 테스트에서 결정적으로 조작 불가 — 가능한 검증 범위(예: MicPermission 분기 로직·report() 종료코드 매핑 단위 테스트)를 먼저 조사하고, 불가 부분은 문서로 증빙 대체. P1-T2 STOP 보고(G6)·CHECKPOINT-0 판정 선행 여부 운영자 확인
+- P1-T1(운영자)·P1-T3(운영자) 대기 — CLI 인터페이스 변경 주의: `--out PATH` 삭제, **`--seconds N --out-dir DIR`** (DIR 아래 remote.wav·local.wav 생성). P1-T3는 remote.wav 사용
 - **CHECKPOINT-0(운영자) 검수 대기** — Phase 0 부트스트랩 완료 상태 유지
-- P1-T1(운영자, 실기기 Continuity 환경 구축)·P1-T3(운영자, R1 실통화 캡처 검증) 대기 — P1-T2 CLI 사용: `.build/debug/CaptureDemo --seconds N --out remote.wav`
-- P1-T2 운영자 최종 스모크(음악 재생 → 재생 확인) 미수행 — 위 지시대로 실행 후 docs/spike-r1-report.md 준비 시 활용
 - 환경 노트: 로컬 python3는 3.12.8(§4는 ml 툴링 3.11 전제) — ml venv·의존성 구성은 P3-T1 시점에 3.11로 구축(G10 절차)
 ## STOP 보고 (운영자 확인 대기)
 - CHECKPOINT-0: Phase 0 부트스트랩 5태스크 전부 DoD 통과로 완료 — 운영자 검수 대기(하네스 루프 정상 동작 여부 판정)

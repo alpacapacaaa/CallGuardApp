@@ -59,6 +59,11 @@ let package = Package(
             name: "EvaluateDetection",
             dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
         ),
+        // P4-T6 (M1): scripts/measure_latency.sh --stage e2e 가 호출하는 주입→경고 전 구간 지연 측정 CLI.
+        .executableTarget(
+            name: "MeasureE2ELatency",
+            dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
+        ),
         // P4-T2 DoD: RiskScore 픽스처 3상태를 docs/ui/에 PNG로 저장.
         .executableTarget(
             name: "RenderUIStates",

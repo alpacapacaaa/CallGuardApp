@@ -17,5 +17,6 @@ ml/datasets/
 .omo/
 .qwen/
 stt-latency.csv
+e2e-latency.csv
 ml/training/model.json
 ml/training/scores.json

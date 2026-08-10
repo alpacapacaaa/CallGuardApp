@@ -64,6 +64,11 @@ let package = Package(
             name: "MeasureE2ELatency",
             dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
         ),
+        // P4-T7 (M7): scripts/load_test.sh 가 호출하는 반복 재생 부하(CPU·메모리·지연 드리프트) 측정 CLI.
+        .executableTarget(
+            name: "LoadTest",
+            dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
+        ),
         // P4-T2 DoD: RiskScore 픽스처 3상태를 docs/ui/에 PNG로 저장.
         .executableTarget(
             name: "RenderUIStates",

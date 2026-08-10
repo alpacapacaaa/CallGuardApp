@@ -68,21 +68,23 @@ STOP 보고 형식: `[태스크 ID] 무엇을 하려 했나 / 무엇이 막혔�
 데이터 흐름 (모듈 의존 방향도 이 순서만 허용, UI→Capture 직접 참조 금지):
 
 ```
-SCK(remote) ─┐
-             ├→ Session(트랙 태깅) → Preprocess(16kHz, VAD, 2s 청크)
-Mic(local)  ─┘        → STT(whisper.cpp, 트랙별 인스턴스)
-                      → Detection(RuleEngine → KoBERT CoreML, 60s 윈도)
-                      → AlertPolicy(0.5 주의 / 0.8 위험, 히스테리시스)
-                      → UI(메뉴바/배너/전면 패널)
-                      → SessionStore(기본 폐기, 옵트인 암호화 저장)
+FileAudioSource(파일 재생, MVP 주경로) ─┐
+SCK(remote)/Mic(local) [Could, F-C4]  ─┤→ Session(트랙 태깅) → Preprocess(16kHz, VAD, 2s 청크)
+                                                  → STT(whisper.cpp, 트랙별 인스턴스)
+                                                  → Detection(RuleEngine → 경량 선형 분류기, 60s 윈도)
+                                                  → AlertPolicy(0.5 주의 / 0.8 위험, 히스테리시스)
+                                                  → UI(메뉴바/배너/전면 패널)
+                                                  → SessionStore(기본 폐기, 옵트인 암호화 저장)
 ```
+
+> **2026-08-10 스코프 변경(운영자)**: MVP 입력은 `AudioSource`(FileAudioSource)를 통한 WAV 재생이 주 경로다. SCK/Continuity 실기기 캡처는 Could(PRD F-C4)로 격하 — 관련 태스크는 plan.md Phase 1 참조(보류 상태로 유지, 재작업 금지). 상세 근거는 PRD.md §2·§6(R1) 참조.
 
 | 영역 | 확정 스택 | 에이전트가 하지 말 것 |
 |---|---|---|
 | 앱 | Swift 5.10+ / SwiftUI / SwiftPM | CocoaPods, Obj-C 신규 코드 |
-| 캡처 | SCK 오디오 전용 + AVAudioEngine | 비디오 캡처 활성화, BlackHole 임의 도입 |
+| 캡처(MVP) | `AudioSource`(FileAudioSource, 실시간 페이싱) 파일 재생이 주 경로 | 비디오 캡처 활성화, BlackHole 임의 도입, 라이브 SCK/Continuity 추가 투자(운영자 승인 없이 — Could 격하 상태) |
 | STT | whisper.cpp (Metal, 모델 해시 고정) | 클라우드 STT, 모델 파일 무단 교체 |
-| 분류 | KoBERT → Core ML 인프로세스 | Python 사이드카, 런타임 pip 의존 |
+| 분류 | 경량 선형 분류기(TF-IDF+로지스틱회귀) → 가중치 JSON, Swift 인프로세스 직접 구현 | Python 사이드카, 런타임 pip 의존, CoreML/BERT 재도입(운영자 승인 없이) |
 | ML 툴링 | Python 3.11, `ml/` 격리 | `ml/` 코드·의존성의 `Sources/` 유입 |
 | 저장 | GRDB(SQLite) + 필드 암호화 | 평문 저장, 외부 DB |
 | 테스트 주입 | `AudioSource` 프로토콜 + `FileAudioSource`(실시간 페이싱) | SCK를 목 없이 테스트에 직접 사용 |
@@ -131,5 +133,5 @@ Mic(local)  ─┘        → STT(whisper.cpp, 트랙별 인스턴스)
 
 ## 9. 참고 문서 (필요 태스크에서만 조회)
 
-SCK: Apple *ScreenCaptureKit* (`SCStreamConfiguration.capturesAudio`) · 마이크: *AVAudioEngine* input tap · STT: ggml-org/whisper.cpp README·stream 예제 · 변환: Apple *coremltools* (tokenizer는 변환 대상 아님 — Swift 측 처리 필요) · 데이터: 금감원 "그놈 목소리"(이용조건 확인 후) · 내부: `docs/PRD-full.md`, `docs/` 스파이크 리포트.
+STT: ggml-org/whisper.cpp README·stream 예제 · 분류: scikit-learn(TF-IDF+로지스틱회귀, `ml/` 격리 Python 툴링) — 가중치는 JSON export 후 Swift에서 직접 파싱 · 참고 데이터/코드: 금감원 "그놈 목소리"(이용조건 확인 후), KorCCVi 데이터셋(라이선스 확인) · Could 재개용: SCK *ScreenCaptureKit* (`SCStreamConfiguration.capturesAudio`) · 마이크 *AVAudioEngine* input tap · 내부: `docs/PRD-full.md`, `docs/` 스파이크 리포트.
 API 사용 전 반드시 해당 심볼이 실재하는지 문서/헤더로 확인한다 — 존재하지 않는 파라미터를 지어내는 것은 이 하네스에서 가장 흔한 실패 모드다.

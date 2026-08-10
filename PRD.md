@@ -6,14 +6,14 @@
 
 ## 1. 제품 정의 (1문단)
 
-macOS 14+ 네이티브 앱. iPhone 통화 미러링(Continuity)으로 Mac에서 받은 통화의 오디오를 ScreenCaptureKit(상대방=시스템 오디오)과 AVAudioEngine(본인=마이크)으로 분리 캡처 → 온디바이스 스트리밍 STT(whisper.cpp) → 2단계 탐지(룰 1차 + KoBERT Core ML 2차) → 통화 중 실시간 보이스피싱 경고. 오디오·전사·판정은 절대 기기 밖으로 나가지 않는다.
+macOS 14+ 네이티브 앱. 통화 오디오(v2 MVP: 파일 재생 입력 / Could: iPhone 통화 미러링(Continuity)을 ScreenCaptureKit+AVAudioEngine으로 분리 캡처) → 온디바이스 스트리밍 STT(whisper.cpp) → 2단계 탐지(룰 1차 + 경량 선형 분류기 2차) → 통화 중 실시간 보이스피싱 경고. 오디오·전사·판정은 절대 기기 밖으로 나가지 않는다.
 
 ## 2. 확정 스코프
 
 - 개인용 macOS 앱 단일 타깃. B2B/서버/계정/클라우드 없음.
 - 한국어 전용. Apple Silicon 전용, 최저 사양 기준 M2/8GB.
-- 캡처 경로: ScreenCaptureKit 오디오 전용. BlackHole는 R1 실패 시 폴백(운영자 승인 후에만).
-- 화자 분리는 소스 분리로 해결. diarization 구현 금지.
+- **입력 경로(v2, 2026-08-10 운영자 결정): 오디오 파일(WAV) 재생이 MVP 주 경로.** `AudioSource` 프로토콜의 `FileAudioSource`(실시간 페이싱, P0-T3 완료)로 통화 녹음/합성 시나리오를 재생하면 이후 파이프라인은 라이브 캡처와 동일하게 동작한다. 라이브 캡처(ScreenCaptureKit+Continuity 미러링, BlackHole 폴백 포함)는 §4 Could(F-C4)로 격하 — R1 리스크·실기기 의존·TCC 권한 검증이 크리티컬 패스에서 빠진다. 기 구현된 SCK/마이크 캡처 코드(P1-T2/T4/T5)는 유지하되 추가 투자는 보류.
+- 화자 분리는 소스 분리(remote/local 트랙 또는 라벨링된 픽스처)로 해결. diarization 구현 금지.
 
 ## 3. 정량 목표 (측정 스크립트로만 판정)
 
@@ -33,10 +33,10 @@ macOS 14+ 네이티브 앱. iPhone 통화 미러링(Continuity)으로 Mac에서 
 ## 4. 기능 요구사항 (MoSCoW)
 
 ### Must
-- **F-M1** SCK 시스템 오디오 실시간 캡처: 48kHz PCM, 캡처 지연 ≤ 200ms, 비디오 미구성.
-- **F-M2** 통화 세션 자동 감지(시작/종료) + 수동 시작 폴백 버튼.
+- **F-M1** 오디오 입력 스트리밍: `FileAudioSource`로 WAV를 실시간 페이싱 재생해 파이프라인에 공급(48kHz PCM 기준). 라이브 SCK 캡처는 F-C4로 이동.
+- **F-M2** 세션 시작/종료(v2): 오디오 소스 재생 시작=세션 시작, 재생 종료(EOF)=세션 종료 + 수동 중지 버튼. (라이브 통화의 OS 신호 기반 자동 감지는 F-C4와 함께 Could로 이동)
 - **F-M3** 온디바이스 STT: whisper.cpp 스트리밍, 2s 청크, 청크 처리 ≤ 1.5s, CER ≤ 15%.
-- **F-M4** 2단계 탐지: RuleEngine(rules.yaml 카테고리 5종: 기관사칭/계좌송금/앱설치유도/개인정보요구/협박긴급성) + KoBERT Core ML 슬라이딩 윈도(직전 60s). 출력 `RiskScore { value 0..1, category, evidence[] }`.
+- **F-M4** 2단계 탐지: RuleEngine(rules.yaml 카테고리 5종: 기관사칭/계좌송금/앱설치유도/개인정보요구/협박긴급성) + 경량 선형 분류기(TF-IDF+로지스틱회귀, Swift 인프로세스 직접 구현·CoreML 미사용) 슬라이딩 윈도(직전 60s). 출력 `RiskScore { value 0..1, category, evidence[] }`.
 - **F-M5** 2단계 경고 UI: score ≥ 0.5 주의(메뉴바+배너), ≥ 0.8 위험(전면 패널: 유형+근거 발화 2–3건+권장 행동+[무시]).
 - **F-M6** 온보딩: 환경 자동 진단, 권한 가이드, 내장 샘플 자가 진단.
 - **F-M7** 프라이버시 기본값: 통화 종료 시 오디오·전사 전량 메모리 폐기. 저장은 옵트인 시에만(암호화).
@@ -50,7 +50,7 @@ macOS 14+ 네이티브 앱. iPhone 통화 미러링(Continuity)으로 Mac에서 
 - **F-S6** 파이프라인 단계별 지연 계측 로깅(CSV 출력).
 
 ### Could (운영자 승인 후에만 착수)
-- F-C1 로컬 소형 LLM 2차 판정 / F-C2 위험 통화 요약 / F-C4 BlackHole 폴백 캡처.
+- F-C1 로컬 소형 LLM 2차 판정 / F-C2 위험 통화 요약 / F-C4 라이브 캡처 재개(ScreenCaptureKit+Continuity 미러링, BlackHole 폴백 포함 — 기 구현된 P1-T2/T4/T5 코드 위에서 R1 실기기 검증부터 재개).
 
 ### Won't (구현 금지 — Guardrail과 동일 효력)
 - F-W1 자동 차단/자동 신고 / F-W2 발신번호 DB / F-W3 클라우드 STT·LLM / F-W4 diarization / F-W5 딥페이크 탐지.
@@ -68,12 +68,13 @@ macOS 14+ 네이티브 앱. iPhone 통화 미러링(Continuity)으로 Mac에서 
 
 ## 6. 리스크 (에이전트가 알아야 할 것만)
 
-- **R1** 통화 미러링 오디오가 SCK에서 제외될 가능성 → plan.md P1이 최우선인 이유. 검증 실패 시 에이전트는 폴백을 임의 착수하지 말고 STOP 보고(AGENTS.md §3).
+- **R1 (2026-08-10 스코프 변경으로 해소)** 통화 미러링 오디오가 SCK에서 제외될 가능성 리스크는 입력 경로를 파일 재생 기반으로 전환하면서 크리티컬 패스에서 제거됨. 라이브 캡처(F-C4)를 재개할 때만 재적용 — 그 전까지 에이전트는 R1 관련 태스크에 착수하지 않는다.
 - **R3** 통화 대역 오디오로 CER 목표 미달 가능 → 평가셋에 8kHz 다운샘플 증강 포함 필수.
 - **R6** 화면 녹화 권한 오해 → SCK는 오디오 전용 구성 유지(코드로 보장).
 - **R8** 오경보=제품 실패 → 튜닝 시 M5(FPR)를 깨면서 M3(Recall)을 올리는 것 금지.
 
 ## 7. 참고 (읽기 전용)
 
+- 경량 분류기 참고 구현(이식용, 라이선스·출처 유지 의무 G5): `selfcontrol7/Korean_Voice_Phishing_Detection`(MIT, KorCCVi 데이터셋 학습 코드) — 가중치 자체는 공개되어 있지 않아 재사용 불가, 학습 코드/데이터셋만 어댑트한다.
 - 사람용 상세 PRD: `docs/PRD-full.md` (페르소나, 사용자 플로우, 법적 검토, B2B 로드맵)
 - 법적 요건 요약: 당사자 녹음은 적법(통신비밀보호법), 상대방 음성은 개인정보 → F-M7/F-M8이 그 구현이다. 에이전트는 법적 판단을 하지 않는다.

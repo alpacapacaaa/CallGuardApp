@@ -63,7 +63,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CallGuardSlowTests",
-            dependencies: ["Capture", "STT", "TestSupport"]
+            dependencies: ["Capture", "STT", "Detection", "TestSupport"]
         ),
     ]
 )

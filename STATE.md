@@ -1,6 +1,6 @@
 # STATE
 ## 현재 태스크
-P2-T5 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
+P2-T6 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
 ## 완료 태스크
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
@@ -16,7 +16,8 @@ P2-T5 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소�
 - [x] P4-T4 (2026-08-11, commit caf50c9 — GRDB 운영자 승인 후 착수, 3개 DoD 테스트 전부 통과)
 - [x] P2-T2 (2026-08-11, commit 1d4f4f2 — whisper.cpp, Metal 실추론 확인)
 - [x] P2-T3 (2026-08-11, commit a3f6ffb — TrackTranscriber)
-- [x] P2-T4 (2026-08-11, 커밋 예정 — MeasureSTTLatency CLI + measure_latency.sh --stage stt. 실측: 20샘플, p50=183.8ms p95=553.4ms(예산 1.5s 이내). WavFile public화 필요했음)
+- [x] P2-T4 (2026-08-11, commit 4ecdd5b — MeasureSTTLatency, p50=183.8ms p95=553.4ms)
+- [x] P2-T5 (2026-08-11, 커밋 예정 — TranscribeFixtures CLI(wide+narrow8k) + ml/eval/cer.py(순수 stdlib 레벤슈타인). 실측 overall CER=0.619 — tiny 모델 한계(예상됨, P2-T6에서 base/small 벤치마크 예정, PRD 목표 ≤15%)
 ## 작업 메모 (현재 태스크의 세부 체크리스트)
 P2-T2 완료 체크리스트:
 - [x] 조사(AGENTS.md §9 — API 존재 확인 의무): ggml-org/whisper.cpp 저장소엔 루트 Package.swift가 없음(gh api로 직접 확인). ggerganov/whisper.spm·exPHAT/SwiftWhisper 둘 다 2024-05 이후 정지, Metal 명시적 미지원(whisper.spm 코멘트: "TODO: make Metal work") — 채택 안 함

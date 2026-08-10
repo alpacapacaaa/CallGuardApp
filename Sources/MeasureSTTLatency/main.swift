@@ -5,7 +5,7 @@ import STT
 // P2-T4 (F-S6): 캡처→전사 구간 지연 측정. 픽스처 10개 × 2회 = 20 샘플.
 // 각 청크의 latency = whisper_full() 호출 실측 시간(Preprocess는 순수 연산이라 무시 가능한 수준).
 
-let modelSHA256 = "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
+let defaultSHA256 = "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
 
 func fail(_ message: String) -> Never {
     print("status: FAILED — \(message)")
@@ -26,12 +26,14 @@ let cachesURL = try? FileManager.default.url(
     for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
 )
 let cacheDir = cachesURL?.appendingPathComponent("CallGuard/whisper-model-cache")
-guard let modelURL = cacheDir?.appendingPathComponent("ggml-tiny.bin"),
+let modelFileName = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "ggml-tiny.bin"
+guard let modelURL = cacheDir?.appendingPathComponent(modelFileName),
       FileManager.default.fileExists(atPath: modelURL.path)
 else {
     fail("모델 캐시 없음 — 먼저 실행: swift test --filter WhisperEngineTests")
 }
 
+let modelSHA256 = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : defaultSHA256
 let spec = WhisperModelSpec(expectedSHA256: modelSHA256)
 var latenciesMs: [Double] = []
 var csvRows = ["fixture,latency_ms"]

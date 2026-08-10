@@ -40,12 +40,15 @@ guard !fixtures.isEmpty else { fail("픽스처 0개") }
 let cachesURL = try? FileManager.default.url(
     for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
 )
-let modelURL = cachesURL?.appendingPathComponent("CallGuard/whisper-model-cache/ggml-tiny.bin")
+let modelFileName = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "ggml-tiny.bin"
+let modelURL = cachesURL?.appendingPathComponent("CallGuard/whisper-model-cache/\(modelFileName)")
 guard let modelURL, FileManager.default.fileExists(atPath: modelURL.path) else {
     fail("모델 캐시 없음 — 먼저 실행: swift test --filter WhisperEngineTests")
 }
 
-let spec = WhisperModelSpec(expectedSHA256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21")
+let defaultSHA256 = "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
+let modelSHA256 = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : defaultSHA256
+let spec = WhisperModelSpec(expectedSHA256: modelSHA256)
 
 for fixture in fixtures {
     guard let data = try? Data(contentsOf: fixture), let wav = try? WavFile.parse(data) else {

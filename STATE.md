@@ -1,6 +1,6 @@
 # STATE
 ## 현재 태스크
-P2-T6 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
+P3-T1 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
 ## 완료 태스크
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
@@ -17,7 +17,10 @@ P2-T6 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소�
 - [x] P2-T2 (2026-08-11, commit 1d4f4f2 — whisper.cpp, Metal 실추론 확인)
 - [x] P2-T3 (2026-08-11, commit a3f6ffb — TrackTranscriber)
 - [x] P2-T4 (2026-08-11, commit 4ecdd5b — MeasureSTTLatency, p50=183.8ms p95=553.4ms)
-- [x] P2-T5 (2026-08-11, 커밋 예정 — TranscribeFixtures CLI(wide+narrow8k) + ml/eval/cer.py(순수 stdlib 레벤슈타인). 실측 overall CER=0.619 — tiny 모델 한계(예상됨, P2-T6에서 base/small 벤치마크 예정, PRD 목표 ≤15%)
+- [x] P2-T5 (2026-08-11, commit 9146357 — CER 측정, tiny CER=0.619)
+- [x] P2-T6 (2026-08-11, 커밋 예정 — docs/stt-benchmark.md. tiny/base/small 3종 비교: p95 전부 1.5s 예산 이내(540~570ms), CER은 base 0.458 최소로 base 채택. **주의: base도 PRD 목표(≤15%) 대비 3배 높음 — G-2 게이트에서 운영자 판정 필요, 원인 미조사(TTS 픽스처 특성/모델 한계/구두점 비교 오류 등 후보만 기록)**)
+## G-2 게이트: STOP 자료 준비 완료
+STT 확정 판정 준비됨(docs/stt-benchmark.md) — **판정은 운영자**. 지연은 3종 다 통과, CER 미달이 쟁점. 하네스 규칙(plan.md 리스크표: "P2·P3는 픽스처 기반이므로 계속 전진")에 따라 게이트 확정 대기 없이 Phase 3로 계속 진행함.
 ## 작업 메모 (현재 태스크의 세부 체크리스트)
 P2-T2 완료 체크리스트:
 - [x] 조사(AGENTS.md §9 — API 존재 확인 의무): ggml-org/whisper.cpp 저장소엔 루트 Package.swift가 없음(gh api로 직접 확인). ggerganov/whisper.spm·exPHAT/SwiftWhisper 둘 다 2024-05 이후 정지, Metal 명시적 미지원(whisper.spm 코멘트: "TODO: make Metal work") — 채택 안 함

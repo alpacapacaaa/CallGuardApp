@@ -15,7 +15,14 @@ let package = Package(
         .target(name: "Capture"),
         .target(name: "Session", dependencies: ["Capture"]),
         .target(name: "Preprocess", dependencies: ["Session"]),
-        .target(name: "STT", dependencies: ["Preprocess"]),
+        // G10 운영자 승인(2026-08-11): whisper.cpp 공식 XCFramework 릴리즈(v1.9.2, Metal 포함
+        // 모듈맵 완비 — build-xcframework.sh 산출물). 체크섬은 `swift package compute-checksum`으로 직접 산출.
+        .binaryTarget(
+            name: "whisper",
+            url: "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-v1.9.2-xcframework.zip",
+            checksum: "af74fed13ea7f2d5ca2a39d9f58ec177713fafd7cab63aef4e27b79f3ceca80b"
+        ),
+        .target(name: "STT", dependencies: ["Preprocess", "whisper"]),
         .target(name: "Detection", dependencies: ["STT"]),
         .target(name: "AlertPolicy", dependencies: ["Detection"]),
         .target(name: "CallGuardUI", dependencies: ["AlertPolicy"]),
@@ -42,11 +49,11 @@ let package = Package(
         .target(name: "TestSupport", path: "Tests/TestSupport"),
         .testTarget(
             name: "CallGuardFastTests",
-            dependencies: ["Capture", "Session", "Preprocess", "Detection", "SessionStore", "TestSupport"]
+            dependencies: ["Capture", "Session", "Preprocess", "STT", "Detection", "SessionStore", "TestSupport"]
         ),
         .testTarget(
             name: "CallGuardSlowTests",
-            dependencies: ["Capture", "TestSupport"]
+            dependencies: ["Capture", "STT", "TestSupport"]
         ),
     ]
 )

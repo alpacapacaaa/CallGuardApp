@@ -16,10 +16,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> [1/3] swift build"
-swift build
+# --disable-keychain: 일부 환경에서 binaryTarget(whisper) 다운로드 시 macOS 키체인의
+# 무관한 github.com 항목 조회가 실패해 빌드가 막히는 사례 확인(P2-T2). 다운로드가
+# 이미 캐시된 이후엔 영향 없음 — 방어적으로 항상 지정.
+swift build --disable-keychain
 
 echo "==> [2/3] fast 레인 테스트"
-swift test --filter '^CallGuardFastTests\.'
+swift test --disable-keychain --filter '^CallGuardFastTests\.'
 
 echo "==> [3/3] 린트 (swiftlint --strict, swiftformat --lint)"
 command -v swiftlint >/dev/null 2>&1 || { echo "ERROR: swiftlint 미설치 — brew install swiftlint" >&2; exit 1; }

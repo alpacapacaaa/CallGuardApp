@@ -1,0 +1,55 @@
+# CallGuard 1차 탐지 룰(P3-T2, F-M4). 카테고리 5종 고정 — RiskCategory(Sources/Detection/RiskScore.swift)와 rawValue로 매칭.
+# 이 파일 변경 시 rules.yaml.sig(SHA256 hex, 소문자)도 함께 갱신해야 RuleEngine.load가 통과한다.
+version: 1
+rules:
+  - id: impersonation-authority
+    category: institutionImpersonation
+    weight: 0.3
+    keywords:
+      - 검찰청
+      - 금융감독원
+      - 경찰서
+      - 수사관입니다
+      - 검사입니다
+      - 국세청
+      - 금감원
+
+  - id: account-transfer
+    category: accountTransfer
+    weight: 0.3
+    keywords:
+      - 계좌번호를 불러
+      - 안전계좌
+      - 송금하셔야
+      - 이체하셔야
+      - 계좌로 입금
+
+  - id: app-install-lure
+    category: appInstallationLure
+    weight: 0.25
+    keywords:
+      - 앱을 설치
+      - 원격 제어
+      - 원격제어 앱
+      - 화면공유를 허용
+      - 링크를 눌러서 설치
+
+  - id: personal-info-demand
+    category: personalInfoDemand
+    weight: 0.25
+    keywords:
+      - 주민등록번호를 불러
+      - 보안카드 번호
+      - 계좌 비밀번호
+      - 공인인증서 비밀번호
+      - 카드 뒷면 번호
+
+  - id: threat-urgency
+    category: threatUrgency
+    weight: 0.3
+    keywords:
+      - 즉시 체포
+      - 구속영장
+      - 지금 당장 응하지 않으면
+      - 출석하지 않으면
+      - 계좌가 압류

@@ -57,6 +57,11 @@ let package = Package(
             name: "EvaluateDetection",
             dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
         ),
+        // P4-T2 DoD: RiskScore 픽스처 3상태를 docs/ui/에 PNG로 저장.
+        .executableTarget(
+            name: "RenderUIStates",
+            dependencies: ["STT", "Detection", "AlertPolicy", "CallGuardUI"]
+        ),
         // 테스트 레인 (AGENTS.md §7, P0-T2): fast = 단위·룰·정책, slow = STT 통합·E2E·부하·페이싱.
         // 레인 분리는 타깃으로 강제 — swift test CLI에 태그 필터 없음(P0-T2 실증).
         // 후속 `--filter <Feature>Tests` DoD 호환을 위해 클래스명은 레인 접미사 없이 짓는다.
@@ -65,7 +70,8 @@ let package = Package(
         .testTarget(
             name: "CallGuardFastTests",
             dependencies: [
-                "Capture", "Session", "Preprocess", "STT", "Detection", "AlertPolicy", "SessionStore", "TestSupport",
+                "Capture", "Session", "Preprocess", "STT", "Detection", "AlertPolicy", "CallGuardUI", "SessionStore",
+                "TestSupport",
             ]
         ),
         .testTarget(

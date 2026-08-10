@@ -1,7 +1,8 @@
 # STATE
 ## 현재 태스크
-G-3 게이트 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
+P4-T3 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
 ## 완료 태스크
+- [x] P4-T2 (2026-08-11, 커밋 예정 — AlertViewModel+AlertViews(메뉴바/주의배너/위험패널) + RenderUIStates CLI(ImageRenderer→PNG, 신규 의존성 없음). docs/ui/{menubar-none,caution-banner,danger-panel}.png 생성. fast 테스트 4건, ci_fast 전부 통과)
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
 - [x] P0-T3 (2026-08-10, commit 1a80fb8)

@@ -1,6 +1,6 @@
 # STATE
 ## 현재 태스크
-P1-T5
+P2-T1
 ## 완료 태스크
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
@@ -9,37 +9,39 @@ P1-T5
 - [x] P0-T5 (2026-08-10, commit da8f968)
 - [x] P1-T2 (2026-08-10, commit 2508ac6)
 - [x] P1-T4 (2026-08-10, commit 7a56f62)
+- [x] P1-T5 (2026-08-10, commit 8e594c3)
 ## 작업 메모 (현재 태스크의 세부 체크리스트)
-P1-T4 완료 체크리스트:
-- [x] VERIFY: git clean, P1-T2 DoD(WavWriterTests) 재실행 6/6 통과
-- [x] §9 심볼 검증(SDK 헤더 + typecheck 프로브): AVAudioApplication.shared.recordPermission(.granted/.denied/.undetermined)·requestRecordPermission() async→Bool(macos 14), AVAudioEngine.inputNode·installTap(onBus:bufferSize:format:block:)·floatChannelData 실존 확인. AVAudioEngine.h 명시: input 미가용 시 inputNode 접근은 예외 발생 → 권한 게이트(MicPermission) 선행·포맷 가드 설계
-- [x] CaptureError.microphoneDenied 추가 / AudioTrack.captureFileName 파일명 규약(remote.wav·local.wav)
-- [x] MicAudioCapture(AudioSource, track=.local): async init(권한→허드웨어 포맷 조회, 48kHz 실측)→tap→모노 다운믹스→ChunkAccumulator 100ms, 탭 스레드는 NSLock 보호(오디오 콜백 경계), deinit 엔진 정지 안전망
-- [x] CaptureDemo 통합: --out → --out-dir DIR, 태스크 그룹 듀얼 캡처(파일 수명주기 태스크별 소유), 트랙 태그 불일치 런타임 가드, 종료코드 4(마이크 권한) 추가
-- [x] fast 테스트 3건 추가(TrackTaggingTests: 파일명 매핑·태그 방향·청크 태그 보존) — fast 레인 31건 통과
-- [x] 실캡처 증빙(운영자 스모크 대행): 세션 1회 exit 0 → remote.wav·local.wav 2파일 각 3.9s@48kHz(afinfo "1 ch, 48000 Hz, Int16") / TTS 재생 중 캡처: remote peak 20326·RMS 3739 vs local peak 3179·RMS 608 — 신호 경로별 분리 확인(직접 경로 vs 음향 픽업)
+P1-T5 완료 체크리스트:
+- [x] VERIFY: git clean, P1-T4 DoD(TrackTaggingTests) 재실행 3/3 통과
+- [x] 설계: 권한 거부→안내 매핑이 CaptureDemo(실행 타깃)에 있어 fast 레인 테스트 불가 → Capture 모듈 PermissionGuidance로 추출. docs/는 plan.md DoD가 요구하는 문서 디렉토리(§4의 소스 아키텍처 신규 디렉토리가 아님) — 생성
+- [x] Sources/Capture/PermissionGuidance.swift: 순수 총함수 매핑(screenCaptureDenied→exit 3 / microphoneDenied→exit 4 / 그 외 nil)
+- [x] CaptureDemo.report() PermissionGuidance 경유 전환(중복 안내 문자 제거)
+- [x] PermissionGuidanceTests 5건: 권한 2종 안내 상태·종료코드 구분·비권한 오류 nil·전 케이스 크래시 없음 — fast 레인 36건 통과
+- [x] docs/permissions.md(95줄): 요청 경로(SCK=SCShareableContent 최초 호출, 마이크=AVAudioApplication.recordPermission→requestRecordPermission), 거부 동작, 크래시 없음 근거(마이크=inputNode 무접근 선행 게이트·화면=throw 포착→typed error), 권한 주체(터미널 귀속), tccutil 재시험 절차, 검증 범위·한계 명시
 - [x] swiftformat·swiftlint 0 위반, ./scripts/ci_fast.sh exit 0
 ## 마지막 DoD 실행 결과 (원문)
 ```
-$ swift test --filter TrackTaggingTests
-✔ Test sourceTrackTagsMatchPipelineDirection() passed after 0.001 seconds.
-✔ Test captureFileNamesAreFixedPerTrack() passed after 0.001 seconds.
-✔ Test accumulatorTagsChunksWithItsTrack() passed after 0.001 seconds.
-✔ Suite TrackTaggingTests passed after 0.001 seconds.
-✔ Test run with 3 tests in 1 suite passed after 0.001 seconds.
+$ test -f docs/permissions.md && echo 존재
+존재   (95줄)
 
-$ .build/debug/CaptureDemo --seconds 4 --out-dir /tmp/p1t4-session
-완료: [local] 3.9s (187200프레임 @ 48000Hz) → /tmp/p1t4-session/local.wav
-완료: [remote] 3.9s (187200프레임 @ 48000Hz) → /tmp/p1t4-session/remote.wav
-exit: 0   (세션 1회 → 2파일, afinfo "1 ch, 48000 Hz, Int16" 양쪽 확인)
+$ swift test --filter PermissionGuidanceTests
+✔ Test nonPermissionErrorsAreNotGuidance() passed after 0.001 seconds.
+✔ Test screenCaptureDeniedMapsToGuidanceExit3() passed after 0.001 seconds.
+✔ Test mappingIsTotalOverAllErrorCases() passed after 0.001 seconds.
+✔ Test permissionExitCodesAreDistinct() passed after 0.001 seconds.
+✔ Test microphoneDeniedMapsToGuidanceExit4() passed after 0.001 seconds.
+✔ Suite PermissionGuidanceTests passed after 0.001 seconds.
+✔ Test run with 5 tests in 1 suite passed after 0.001 seconds.
 
 $ ./scripts/ci_fast.sh
 ==> ci_fast: 전 단계 통과
-exit: 0   (빌드 + fast 레인 31건 + swiftlint 0 위반 + swiftformat 0/31)
+exit: 0   (빌드 + fast 레인 36건 + swiftlint 0 위반 + swiftformat 0/33)
 ```
+한계 명시(docs §6): 실제 프롬프트·거부 실기기 재현은 운영자 항목(tccutil 리셋 절차 문서화) — fast 레인은 매핑 총함수성 검증
 ## 미해결 이슈 / 다음 세션 지시
-- **다음 태스크 P1-T5 [병렬 가능]**(권한 흐름 조사): docs/permissions.md 작성(TCC 화면녹화·마이크 요청 경로, 거부 시 동작 — P1-T4에서 이미 구현된 종료코드 3·4 안내 흐름 포함) + "권한 미보유 시 크래시 없이 안내 상태 진입" 테스트. 난점: TCC 상태를 테스트에서 결정적으로 조작 불가 — 가능한 검증 범위(예: MicPermission 분기 로직·report() 종료코드 매핑 단위 테스트)를 먼저 조사하고, 불가 부분은 문서로 증빙 대체. P1-T2 STOP 보고(G6)·CHECKPOINT-0 판정 선행 여부 운영자 확인
-- P1-T1(운영자)·P1-T3(운영자) 대기 — CLI 인터페이스 변경 주의: `--out PATH` 삭제, **`--seconds N --out-dir DIR`** (DIR 아래 remote.wav·local.wav 생성). P1-T3는 remote.wav 사용
+- **다음 태스크 P2-T1**(Preprocess): Phase 1의 에이전트 큐 소진(P1-T2·T4·T5 완료) — G-1은 P1-T3(운영자) 미수행으로 준비 불가, STOP 대기. 큐 규칙 근거 전진: plan.md 리스크 표 "P2·P3는 픽스처 기반이므로 계속 전진" + P2-T1 의존=P0-T3 only(충족) + P4-T1과 달리 G-1 의존 미지정. 운영자가 G-1 대기 정지를 원하면 큐 수정으로 지시
+- P2-T1 착수 시: Sources/Preprocess(현재 placeholder)에 48→16kHz 리샘플링·VAD·2s 청크화·타임스탬프 구현. DoD=swift test --filter PreprocessTests(청크 경계 오차 ≤ 50ms 검증 포함). FileAudioSource 48k 합성 픽스처(WavSynth)로 결정적 테스트 가능. 외부 DSP 의존성 추가는 G10 STOP — 직접 구현 원칙(§8-5)
+- P1-T1(운영자)·P1-T3(운영자) 대기 — CLI: `.build/debug/CaptureDemo --seconds N --out-dir DIR` (remote.wav·local.wav 생성). P1-T3는 remote.wav 사용
 - **CHECKPOINT-0(운영자) 검수 대기** — Phase 0 부트스트랩 완료 상태 유지
 - 환경 노트: 로컬 python3는 3.12.8(§4는 ml 툴링 3.11 전제) — ml venv·의존성 구성은 P3-T1 시점에 3.11로 구축(G10 절차)
 ## STOP 보고 (운영자 확인 대기)

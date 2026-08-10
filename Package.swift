@@ -59,7 +59,9 @@ let package = Package(
         .target(name: "TestSupport", path: "Tests/TestSupport"),
         .testTarget(
             name: "CallGuardFastTests",
-            dependencies: ["Capture", "Session", "Preprocess", "STT", "Detection", "SessionStore", "TestSupport"]
+            dependencies: [
+                "Capture", "Session", "Preprocess", "STT", "Detection", "AlertPolicy", "SessionStore", "TestSupport",
+            ]
         ),
         .testTarget(
             name: "CallGuardSlowTests",

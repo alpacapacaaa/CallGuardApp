@@ -7,4 +7,9 @@ public enum CaptureError: Error, Sendable, Equatable {
     case missingFormat
     case missingData
     case unsupportedFormat(detail: String)
+    /// TCC 화면녹화 권한 거부·미부여 (SCStreamError.userDeclined). 크래시 없이 안내 상태로 전환해야 함.
+    case screenCaptureDenied
+    /// 캡처 스트림 시작·유지 실패. detail은 원인 코드·단계만 포함(G1).
+    case captureFailed(detail: String)
+    case wavWriteFailed(path: String)
 }

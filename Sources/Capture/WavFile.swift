@@ -2,11 +2,11 @@ import Foundation
 
 /// 최소 WAV(RIFF/WAVE) 파서 — FileAudioSource가 필요한 범위만 (P0-T3).
 /// 지원: PCM 16-bit(format 1)·IEEE float 32-bit(format 3). 멀티채널은 모노 다운믹스(채널 평균).
-struct WavFile {
-    let sampleRate: Int
-    let channelCount: Int
+public struct WavFile {
+    public let sampleRate: Int
+    public let channelCount: Int
     /// 모노 정규화(-1...1) 샘플.
-    let samples: [Float]
+    public let samples: [Float]
 
     private struct Format {
         let code: Int
@@ -15,7 +15,7 @@ struct WavFile {
         let bitsPerSample: Int
     }
 
-    static func parse(_ data: Data) throws -> WavFile {
+    public static func parse(_ data: Data) throws -> WavFile {
         guard data.count >= 12 else { throw CaptureError.truncated }
         guard tag(data, 0) == "RIFF", tag(data, 8) == "WAVE" else { throw CaptureError.notWav }
 

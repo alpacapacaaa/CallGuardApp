@@ -52,6 +52,11 @@ let package = Package(
             name: "TranscribeFixtures",
             dependencies: ["Capture", "Preprocess", "STT"]
         ),
+        // P3-T7: ml/eval/run.py가 호출하는 STT→Detection→AlertPolicy 전 구간 평가 CLI.
+        .executableTarget(
+            name: "EvaluateDetection",
+            dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
+        ),
         // 테스트 레인 (AGENTS.md §7, P0-T2): fast = 단위·룰·정책, slow = STT 통합·E2E·부하·페이싱.
         // 레인 분리는 타깃으로 강제 — swift test CLI에 태그 필터 없음(P0-T2 실증).
         // 후속 `--filter <Feature>Tests` DoD 호환을 위해 클래스명은 레인 접미사 없이 짓는다.

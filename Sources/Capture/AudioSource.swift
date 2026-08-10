@@ -5,6 +5,14 @@ import Foundation
 public enum AudioTrack: String, CaseIterable, Sendable, Hashable {
     case remote
     case local
+
+    /// 캡처 세션 산출 파일명 규약 (P1-T4) — 세션 1회가 트랙당 파일 1개를 만든다.
+    public var captureFileName: String {
+        switch self {
+        case .remote: "remote.wav"
+        case .local: "local.wav"
+        }
+    }
 }
 
 /// 캡처된 오디오 단위. PCM 모노, -1...1 정규화.

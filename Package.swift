@@ -6,6 +6,10 @@ let package = Package(
     platforms: [
         .macOS(.v14),
     ],
+    dependencies: [
+        // G10 운영자 승인(2026-08-11): 옵트인 세션 저장(P4-T4, AGENTS.md §4 확정 스택 "GRDB(SQLite) + 필드 암호화").
+        .package(url: "https://github.com/groue/GRDB.swift", from: "6.0.0"),
+    ],
     targets: [
         // AGENTS.md §4 데이터 흐름 = 모듈 의존 방향. UI→Capture 직접 참조 금지.
         .target(name: "Capture"),
@@ -15,7 +19,10 @@ let package = Package(
         .target(name: "Detection", dependencies: ["STT"]),
         .target(name: "AlertPolicy", dependencies: ["Detection"]),
         .target(name: "CallGuardUI", dependencies: ["AlertPolicy"]),
-        .target(name: "SessionStore", dependencies: ["Session", "Detection"]),
+        .target(
+            name: "SessionStore",
+            dependencies: ["Session", "Detection", .product(name: "GRDB", package: "GRDB.swift")]
+        ),
         .executableTarget(
             name: "CallGuardApp",
             dependencies: [
@@ -35,7 +42,7 @@ let package = Package(
         .target(name: "TestSupport", path: "Tests/TestSupport"),
         .testTarget(
             name: "CallGuardFastTests",
-            dependencies: ["Capture", "Session", "Preprocess", "Detection", "TestSupport"]
+            dependencies: ["Capture", "Session", "Preprocess", "Detection", "SessionStore", "TestSupport"]
         ),
         .testTarget(
             name: "CallGuardSlowTests",

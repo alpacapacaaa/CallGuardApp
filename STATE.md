@@ -1,6 +1,6 @@
 # STATE
 ## 현재 태스크
-P3-T4 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
+P3-T5 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소화)
 ## 완료 태스크
 - [x] P0-T1 (2026-08-09, commit 7ac9e04)
 - [x] P0-T2 (2026-08-10, commit 0ea0725)
@@ -21,6 +21,7 @@ P3-T4 (운영자 지시: 속도·토큰 절약 우선 — 이하 로그 최소�
 - [x] P2-T6 (2026-08-11, 커밋 예정 — docs/stt-benchmark.md. tiny/base/small 3종 비교: p95 전부 1.5s 예산 이내(540~570ms), CER은 base 0.458 최소로 base 채택. **주의: base도 PRD 목표(≤15%) 대비 3배 높음 — G-2 게이트에서 운영자 판정 필요, 원인 미조사(TTS 픽스처 특성/모델 한계/구두점 비교 오류 등 후보만 기록)**)
 - [x] P3-T1 (2026-08-11, 커밋 예정 — ml/eval/run.py 로더+--dry-run. 현재 10건(피싱5/정상5)만, 목표(50/100)는 실데이터 필요해 운영자 항목으로 명시 후 계속 진행)
 - [x] P3-T3 (2026-08-11, 커밋 예정 — ml/training/train.py: TF-IDF+로지스틱회귀 순수 Python(외부 의존성 0, G10 비대상 — sklearn 안 씀). --smoke: train8/val2, F1=1.0(스모크라 무의미, 명시함). model.json 산출(gitignore — 재생성 가능 아티팩트, stt-latency.csv와 동일 취급))
+- [x] P3-T4 (2026-08-11, 커밋 예정 — Sources/Detection/LinearClassifier.swift: Python train.py와 동일 TF-IDF+시그모이드 알고리즘 직접 구현. 테스트: Swift 점수가 Python scores.json과 완전 일치(오차<1e-6), 추론 0.001초(예산 300ms 여유))
 ## G-2 게이트: STOP 자료 준비 완료
 STT 확정 판정 준비됨(docs/stt-benchmark.md) — **판정은 운영자**. 지연은 3종 다 통과, CER 미달이 쟁점. 하네스 규칙(plan.md 리스크표: "P2·P3는 픽스처 기반이므로 계속 전진")에 따라 게이트 확정 대기 없이 Phase 3로 계속 진행함.
 ## 작업 메모 (현재 태스크의 세부 체크리스트)

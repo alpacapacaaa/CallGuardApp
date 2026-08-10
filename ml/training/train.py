@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "Tests/Fixtures/audio/MANIFEST.md"
 MODEL_OUT = Path(__file__).resolve().parent / "model.json"
+SCORES_OUT = Path(__file__).resolve().parent / "scores.json"
 
 
 def load_examples() -> list:
@@ -155,7 +156,17 @@ def main() -> int:
 
     model = {"vocabulary": vocab, "idf": idf, "weights": weights, "bias": bias}
     MODEL_OUT.write_text(json.dumps(model, ensure_ascii=False), encoding="utf-8")
+
+    # P3-T4 DoD: Swift 추론이 Python과 일치하는지 비교할 기준값 — 전체 예제의 확률 점수.
+    all_features = [tfidf_vector(t, vocab, idf) for t in texts]
+    scores = {
+        text: sigmoid(sum(w * xi for w, xi in zip(weights, x)) + bias)
+        for text, x in zip(texts, all_features)
+    }
+    SCORES_OUT.write_text(json.dumps(scores, ensure_ascii=False), encoding="utf-8")
+
     print(f"model: {MODEL_OUT}")
+    print(f"scores: {SCORES_OUT}")
     print("status: TRAINED")
     return 0
 

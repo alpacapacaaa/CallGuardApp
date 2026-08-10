@@ -14,3 +14,5 @@ __pycache__/
 
 # G5: 실데이터셋은 커밋 금지 — 합성 픽스처만 Tests/Fixtures/에 커밋
 ml/datasets/
+.omo/
+.qwen/

@@ -69,6 +69,11 @@ let package = Package(
             name: "LoadTest",
             dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy"]
         ),
+        // 수동 테스트 CLI: 임의의 통화 녹음 파일을 실시간 페이싱으로 재생해 전 구간 파이프라인 실행.
+        .executableTarget(
+            name: "AnalyzeCall",
+            dependencies: ["Capture", "Preprocess", "STT", "Detection", "AlertPolicy", "CallGuardUI"]
+        ),
         // P4-T2 DoD: RiskScore 픽스처 3상태를 docs/ui/에 PNG로 저장.
         .executableTarget(
             name: "RenderUIStates",

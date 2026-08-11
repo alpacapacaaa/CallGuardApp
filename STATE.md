@@ -1,8 +1,8 @@
 # STATE
 ## 현재 태스크
-CHECKPOINT-4 (운영자) — G-2 해결, G-3 중간 기준 통과. 아래 STOP 보고 참조
+CHECKPOINT-4 (운영자) — G-2·G-3 전부 해결. 아래 STOP 보고 참조
 ## 완료 태스크
-- [x] **G-3 중간 기준 통과(2026-08-11)** — 미탐 3건 실측 디버깅(EvaluateDetection에 임시 stderr 진단 추가 후 원복) 결과: 2건은 `RuleEngine.evaluate`가 순수 문자열 exact-match라 STT의 띄어쓰기 변형(룰 키워드 "안전계좌" vs 실제 STT 출력 "안전 계좌")을 못 잡는 버그였음. `Sources/Detection/RuleEngine.swift`·`DetectionEngine.swift` 양쪽에 공백 제거 정규화(`normalizedForMatching`) 적용 → **Recall 0.400→0.800**(G-3 중간 기준 그대로 충족), Precision 1.000·FPR 0.000 유지. 잔여 1건(phishing-impersonation-01.wav)은 룰 매칭은 되지만 결합값(0.4186)이 경보 임계값(0.5) 미달 — 룰 가중치(0.25~0.3 전부 <0.5)가 낮아 룰 단독으로는 어떤 카테고리도 경보를 못 띄우는 구조적 설계 때문. 가중치 상향은 G12(임계값 조정 금지) 대상이라 **운영자 지정 필요**(P3-T8로 착수 가능)
+- [x] **G-3 완전 해결(2026-08-11, P3-T8 1이터레이션)** — 1단계: 미탐 3건 실측 디버깅(EvaluateDetection에 임시 stderr 진단 추가 후 원복) 결과 2건은 `RuleEngine.evaluate`가 순수 문자열 exact-match라 STT의 띄어쓰기 변형(룰 키워드 "안전계좌" vs 실제 STT 출력 "안전 계좌")을 못 잡는 버그였음. `Sources/Detection/RuleEngine.swift`·`DetectionEngine.swift` 양쪽에 공백 제거 정규화(`normalizedForMatching`) 적용 → Recall 0.400→0.800(중간 기준 통과). 2단계: 잔여 1건은 룰 매칭은 되지만 결합값(0.4186)이 경보 임계값(0.5) 미달 — 룰 가중치(0.25~0.3 전부 <0.5)가 낮아 룰 단독으로는 경보를 못 띄우는 구조적 문제였음. **운영자 지정(2026-08-11)**으로 rules.yaml 가중치를 0.55로 상향(근거: 키워드가 일상 대화에 거의 안 나오는 고정밀 신호라 단독 매칭도 "주의" 트리거 타당, dangerUp 0.8은 유지해 "위험"은 여전히 분류기 확인 필요) → **Recall 0.800→1.000, Precision 1.000·FPR 0.000 회귀 없음**. rules.yaml.sig 갱신. 실사용자 실제 녹음(형이 검찰청 사칭 시나리오 84초 녹음, AnalyzeCall로 재생)으로도 8초부터 주의, 48초부터 위험 지속 확인 — 합성 픽스처 아닌 실음성으로 첫 검증
 - [x] **G-2 게이트 해결(2026-08-11)** — 원인은 모델이 아니라 STT 청크 길이. 실험 경위: (1) 한국어 파인튜닝 ggml 모델 2종 실측 → 둘 다 base보다 나쁨(CER 1.046, 0.882) (2) 실음성 데이터(Zeroth-Korean)로 재현 → CER 0.931로 TTS보다 더 나쁨, "TTS가 원인" 가설 반증 (3) 청킹 없이 전체 클립 1회 호출 → CER 0.931→0.252 급감, 진짜 원인은 `PreprocessPipeline`의 2s 독립 청킹이 문장 중간을 끊어 문맥 손실시킨 것. 청크 길이 2s→8s로 변경(스트리밍성 유지하며 절충) → **우리 TTS 픽스처 CER 0.458→0.114(PASS, 목표 15%)**, E2E 지연도 개선(p50 209.7→122.0ms, p95 713.8→140.1ms, whisper_full 호출 횟수 감소로 오버헤드 절감). PRD.md F-M3·AGENTS.md §4·docs/stt-benchmark.md 반영. 부가 조치: TrackTranscriber에 VAD 게이트, WhisperEngine에 no_speech_prob 필터 추가(이번 데이터엔 효과 없었으나 일반적 안전장치로 유지)
 - [x] P4-T7 (2026-08-11, commit 예정 — 30분 정식 실행 완료. **실측: wall=1804.1s, calls=311회, cpu_avg=2.6%, peak_mem=499.4MB, drift=-8.2% — M7 목표(CPU≤40%/메모리≤2GB/드리프트≤+20%) 전부 여유 있게 통과**)
 - [x] P4-T6 (2026-08-11, commit 2242f3b — MeasureE2ELatency CLI + scripts/measure_latency.sh --stage e2e. base 모델, 픽스처 10×10=100런, 경고 발생 20건. **실측: p50=209.7ms p95=713.8ms — M1 목표(p50≤2.0s/p95≤4.0s) 여유 있게 통과**. e2e-latency.csv(gitignore, 재생성 아티팩트))
@@ -86,8 +86,8 @@ DoD "단발 추론 테스트 통과 + 해시 불일치 시 로드 거부 테스�
 - [P1-T2] G6 해석 확인 요청(참고용 — P1-T2는 완료·유지 상태, 라이브 캡처 F-C4 재개 시에만 재소집 필요): SCK에는 비디오 캡처 완전 비활성화 속성이 없음(0×0 구성은 -3812 거부, 구성 변형 5종 실측). 에이전트 구현 = 최소 표면(2×2)·커서 없음·최저 프레임 간격 + 비디오 출력(.screen) 미등록 → 비디오 프레임이 프로세스로 전달되는 경로 부재(프로브: videoBuffers=0). 이것이 G6 "비디오 캡처 활성화 금지"를 충족하는지 운영자 판정 필요 — 불인정 시 P1-T2 재설계(대안 경로는 G10·큐 수정 사항)
 - **[CHECKPOINT-4] Phase 4 에이전트 큐 소진(P4-T1~T8 전부 DoD 통과) — 운영자 판정 대기.** docs/metrics-final.md에 M1–M9 종합. 핵심 쟁점:
   1. ~~G-2(M6 CER) 미달~~ **해결(2026-08-11)** — STT 청크 8s화로 CER 0.458→0.114(PASS). 상세: docs/stt-benchmark.md, STATE.md 완료 태스크 항목
-  2. ~~G-3(M3 Recall) 미달~~ **중간 기준 통과(2026-08-11)** — RuleEngine 공백 정규화 버그 수정으로 Recall 0.400→0.800. 잔여 1건은 룰 가중치 상향 여부의 운영자 판단 필요(G12 대상) → 원하면 P3-T8로 착수
-  3. **평가셋 실데이터 미확보**(P3-T1 이후 그대로) — M2–M5는 10건 스모크 참고치일 뿐, 통계적 신뢰 불가
+  2. ~~G-3(M3 Recall) 미달~~ **완전 해결(2026-08-11)** — RuleEngine 공백 정규화(0.400→0.800) + 운영자 지정 룰 가중치 상향(0.800→1.000, Precision/FPR 회귀 없음). 상세: STATE.md 완료 태스크 항목, docs/metrics-final.md
+  3. **평가셋 실데이터 미확보**(P3-T1 이후 그대로) — M2·M3~M5는 10건 스모크 참고치일 뿐, 표본 크기 자체의 통계적 신뢰 문제는 남아있음(별개 사안)
   4. **P4-T9(실기기 스모크+M8 사용성)는 운영자 전용** — 에이전트 대행 불가, CHECKPOINT-4 완결에 필수
-  5. M1(122.0/140.1ms)·M3(0.800)·M6(0.114)·M7(cpu2.6%/mem499MB/drift-8.2%)·M9(0건) 5개 지표 통과
+  5. M1(121.1/215.3ms)·M3(1.000)·M6(0.114)·M7(cpu2.6%/mem499MB/drift-8.2%)·M9(0건) 5개 지표 전부 통과 — **에이전트 판정 가능 지표는 전부 목표 달성**
   Phase 5(P5-T1~T4)는 CHECKPOINT-4 통과 전까지 전부 블록 — 에이전트가 임의로 선진행하지 않음(plan.md 의존관계 준수)

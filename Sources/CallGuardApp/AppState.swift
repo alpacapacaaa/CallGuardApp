@@ -24,6 +24,7 @@ final class AppState {
     private(set) var statusMessage = "동의 후 통화 녹음 파일을 선택하세요"
     private(set) var isPlaying = false
     private(set) var transcriptLog: [TranscriptLogEntry] = []
+    private(set) var captureStartTime: Date?
 
     private var playbackTask: Task<Void, Never>?
     private var localCaptureTask: Task<Void, Never>?
@@ -87,6 +88,7 @@ final class AppState {
         currentScore = nil
         transcriptLog.removeAll()
         statusMessage = label
+        captureStartTime = Date()
 
         let policyActor = PolicyActor()
         self.policyActor = policyActor
@@ -153,6 +155,7 @@ final class AppState {
 
     private func finish() {
         isPlaying = false
+        captureStartTime = nil
         dangerWindow?.close()
         dangerWindow = nil
         statusMessage = "통화 종료 — 최종 판정: \(alertLevel == .none ? "정상" : alertLevel == .caution ? "주의" : "위험")"

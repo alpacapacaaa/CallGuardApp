@@ -29,7 +29,8 @@ public struct DetectionEngine: Sendable {
         let value = min(max(classifierScore, topMatch.weight), 1.0)
         let matchedKeywords = Set(matches.flatMap(\.matchedKeywords))
         let evidence = window.filter { segment in
-            matchedKeywords.contains { segment.text.contains($0) }
+            let normalizedSegmentText = normalizedForMatching(segment.text)
+            return matchedKeywords.contains { normalizedSegmentText.contains(normalizedForMatching($0)) }
         }
 
         return RiskScore(value: value, category: topMatch.category, evidence: evidence)

@@ -73,6 +73,42 @@ struct PreprocessTests {
         }
     }
 
+    @Test func silenceAfterMinDurationTriggersEarlyChunkBeforeMaxDuration() {
+        // minChunkDuration만큼 발화(톤) + silenceProbeDuration만큼 무음을 한 번에 공급 —
+        // chunkDuration(8s)까지 기다리지 않고 무음 지점에서 조기 컷되어야 한다(자막 지연 개선).
+        var pipeline = PreprocessPipeline(track: .remote)
+        let rate = PreprocessPipeline.targetSampleRate
+        let speechFrames = Int(PreprocessPipeline.minChunkDuration * Double(rate))
+        let silenceFrames = Int(PreprocessPipeline.silenceProbeDuration * Double(rate))
+        let speech = (0 ..< speechFrames).map { Float(sin(2 * Double.pi * 440 * Double($0) / Double(rate))) * 0.5 }
+        let silence = [Float](repeating: 0, count: silenceFrames)
+        let chunk = AudioChunk(track: .remote, samples: speech + silence, sampleRate: rate, capturedAt: Date())
+
+        let results = pipeline.feed(chunk)
+
+        #expect(results.count == 1)
+        #expect(results[0].samples.count == speechFrames + silenceFrames)
+        // chunkDuration(8s) 상한보다 훨씬 짧게 끊겼어야 한다 — 조기 컷 확인.
+        #expect(Double(results[0].samples.count) / Double(rate) < PreprocessPipeline.chunkDuration)
+        #expect(pipeline.flush() == nil)
+    }
+
+    @Test func briefPauseUnderProbeDurationDoesNotTriggerEarlyChunk() {
+        // minChunkDuration을 채웠어도 뒤쪽 무음 구간이 silenceProbeDuration보다 짧으면(찰나의
+        // 끊김) 조기 컷하지 않는다 — 단어 사이 미세한 끊김까지 잘라 과분할되는 것 방지.
+        var pipeline = PreprocessPipeline(track: .remote)
+        let rate = PreprocessPipeline.targetSampleRate
+        let speechFrames = Int(PreprocessPipeline.minChunkDuration * Double(rate))
+        let briefSilenceFrames = Int(PreprocessPipeline.silenceProbeDuration * Double(rate) * 0.5)
+        let speech = (0 ..< speechFrames).map { Float(sin(2 * Double.pi * 440 * Double($0) / Double(rate))) * 0.5 }
+        let silence = [Float](repeating: 0, count: briefSilenceFrames)
+        let chunk = AudioChunk(track: .remote, samples: speech + silence, sampleRate: rate, capturedAt: Date())
+
+        let results = pipeline.feed(chunk)
+
+        #expect(results.isEmpty)
+    }
+
     @Test func flushReturnsNilWhenNoResidual() {
         var pipeline = PreprocessPipeline(track: .local)
         let exactChunkFrames = Int(PreprocessPipeline.chunkDuration * Double(PreprocessPipeline.targetSampleRate))

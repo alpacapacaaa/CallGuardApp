@@ -1,5 +1,6 @@
 import AlertPolicy
 import CallGuardUI
+import Capture
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -50,9 +51,9 @@ struct ControlPanelView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(appState.transcriptLog) { entry in
-                            Text("[\(entry.timestamp)] \(entry.text)")
+                            Text("[\(entry.timestamp)][\(speakerLabel(entry.track))] \(entry.text)")
                                 .font(.caption2)
-                                .foregroundStyle(entry.level == .none ? .secondary : .primary)
+                                .foregroundStyle(logColor(for: entry))
                         }
                     }
                 }
@@ -61,5 +62,19 @@ struct ControlPanelView: View {
         }
         .padding()
         .frame(width: 340)
+    }
+
+    private func speakerLabel(_ track: AudioTrack) -> String {
+        switch track {
+        case .remote: "상대방"
+        case .local: "나"
+        }
+    }
+
+    private func logColor(for entry: TranscriptLogEntry) -> Color {
+        if entry.track == .local {
+            return .blue
+        }
+        return entry.level == .none ? .secondary : .primary
     }
 }

@@ -118,3 +118,29 @@ func runPipeline(
 
     await onFinished()
 }
+
+/// 로컬(본인) 트랙 전용 — 전사만 하고 탐지에는 넣지 않는다(rules.yaml 키워드가 상대방 발화
+/// 패턴이라 본인 트랙에서 매칭될 근거가 없음). 화자 분리(F-S1 계열) 표시용.
+func runTranscriptionOnlyPipeline(
+    source: any AudioSource,
+    onSegment: @escaping @MainActor (TranscriptSegment) -> Void
+) async {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    guard let context = try? loadPipelineContext(root: root),
+          let engine = try? WhisperEngine(modelURL: context.modelURL, spec: context.sttSpec)
+    else { return }
+
+    var transcriber = TrackTranscriber(track: source.track, engine: engine)
+    do {
+        for try await chunk in source.chunks() {
+            for segment in try transcriber.feed(chunk) {
+                await onSegment(segment)
+            }
+        }
+        if let residual = try transcriber.flush() {
+            await onSegment(residual)
+        }
+    } catch {
+        // 로컬 트랙은 보조 정보 — 실패해도 원격 트랙 세션은 계속 진행한다.
+    }
+}

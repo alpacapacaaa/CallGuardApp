@@ -9,6 +9,7 @@ import STT
 
 struct TranscriptLogEntry: Identifiable {
     let id = UUID()
+    let track: AudioTrack
     let timestamp: String
     let level: AlertLevel
     let text: String
@@ -25,14 +26,21 @@ final class AppState {
     private(set) var transcriptLog: [TranscriptLogEntry] = []
 
     private var playbackTask: Task<Void, Never>?
+    private var localCaptureTask: Task<Void, Never>?
     private var policyActor: PolicyActor?
     private var dangerWindow: DangerWindowController?
+    /// SessionController는 idle→active→ended 1회용 상태머신(P4-T1 설계, 재사용 불가 —
+    /// SessionControllerTests.eventsAfterEndedAreIgnored가 이 계약을 고정한다). 앱은 여러 번
+    /// 캡처를 시작/중지할 수 있어야 하므로 세션마다 새 인스턴스를 만들되, 동의는 앱 레벨에서
+    /// 별도로 기억해 매번 다시 묻지 않는다(G7은 "최초 1회 필수"로 충족 — 완전 생략은 아님).
+    private var hasEverConsented = false
 
     var hasConsent: Bool {
-        sessionController.hasConsent
+        hasEverConsented
     }
 
     func grantConsent() {
+        hasEverConsented = true
         sessionController.handle(.consentGranted)
         statusMessage = "동의 완료 — 파일을 선택하세요"
     }
@@ -49,15 +57,26 @@ final class AppState {
         begin(source: source, label: "재생 중: \(fileURL.lastPathComponent)")
     }
 
-    /// 실시간 통화 캡처(F-C4) — 아이폰 통화 미러링(Continuity)으로 Mac 시스템 오디오에 흘러든
-    /// 상대방 음성을 ScreenCaptureKit으로 캡처한다. 화면 녹화 TCC 권한이 최초 호출 시 요청됨.
-    /// 현재는 remote(상대방) 트랙만 탐지에 사용 — rules.yaml 키워드가 전부 상대방(가해자) 발화
-    /// 패턴이라 본인(local) 트랙은 이번 범위에서 제외(SessionStore 옵트인 저장 시점에 재검토).
+    /// 실시간 통화 캡처(F-C4). 상대방 오디오(SystemAudioCapture, remote)는 탐지까지 수행하고,
+    /// 본인 마이크(MicAudioCapture, local)는 병렬로 전사만 해 화자 구분 표시에 쓴다 — rules.yaml
+    /// 키워드가 전부 상대방(가해자) 발화 패턴이라 본인 트랙은 탐지 판정에 넣지 않는다.
     func startLiveCapture() {
-        begin(source: SystemAudioCapture(), label: "실시간 캡처 중(상대방 오디오)")
+        begin(source: SystemAudioCapture(), label: "실시간 캡처 중")
+        localCaptureTask = Task { [weak self] in
+            guard let mic = try? await MicAudioCapture() else { return }
+            await runTranscriptionOnlyPipeline(source: mic) { segment in
+                self?.appendLog(segment: segment, level: .none)
+            }
+        }
     }
 
     private func begin(source: any AudioSource, label: String) {
+        if sessionController.state != .idle {
+            sessionController = SessionController()
+            if hasEverConsented {
+                sessionController.handle(.consentGranted)
+            }
+        }
         sessionController.handle(.sourceStarted)
         guard sessionController.state == .active else {
             statusMessage = "세션 시작 실패(동의 확인 필요)"
@@ -86,9 +105,7 @@ final class AppState {
     private func handle(segment: TranscriptSegment, score: RiskScore?, level: AlertLevel) {
         alertLevel = level
         currentScore = score
-        transcriptLog.append(
-            TranscriptLogEntry(timestamp: String(format: "%.0fs", segment.endTime), level: level, text: segment.text)
-        )
+        appendLog(segment: segment, level: level)
 
         if level == .danger {
             let viewModel = AlertViewModel(level: level, score: score)
@@ -102,6 +119,15 @@ final class AppState {
         }
     }
 
+    private func appendLog(segment: TranscriptSegment, level: AlertLevel) {
+        transcriptLog.append(
+            TranscriptLogEntry(
+                track: segment.track, timestamp: String(format: "%.0fs", segment.endTime),
+                level: level, text: segment.text
+            )
+        )
+    }
+
     func dismissAlert() {
         guard let category = currentScore?.category, let policyActor else { return }
         dangerWindow?.close()
@@ -112,6 +138,7 @@ final class AppState {
 
     func stopPlayback() {
         playbackTask?.cancel()
+        localCaptureTask?.cancel()
         sessionController.handle(.manualStopRequested)
         finish()
     }
@@ -120,6 +147,7 @@ final class AppState {
         if sessionController.state == .active {
             sessionController.handle(.sourceEnded)
         }
+        localCaptureTask?.cancel()
         finish()
     }
 

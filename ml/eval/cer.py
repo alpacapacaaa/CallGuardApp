@@ -56,7 +56,7 @@ def main() -> int:
             print("status: FAILED — TranscribeFixtures 빌드 실패")
             return 1
 
-    result = subprocess.run([str(BINARY)], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run([str(BINARY), *sys.argv[1:]], cwd=ROOT, capture_output=True, text=True)
     if result.returncode != 0:
         print("status: FAILED — TranscribeFixtures 실행 실패")
         print(result.stderr)

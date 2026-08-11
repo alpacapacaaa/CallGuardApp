@@ -44,12 +44,15 @@ public final class WhisperEngine {
         }
         guard result == 0 else { throw STTError.transcriptionFailed }
 
+        // 무음/저신뢰 구간에서 관련 없는 텍스트를 지어내는 할루시네이션 억제(실측: 실음성
+        // 10건에서 세그먼트 끝마다 "감사합니다" 등 무관 텍스트 삽입, no_speech_prob로 걸러짐 확인).
         let segmentCount = whisper_full_n_segments(context)
         var text = ""
         for index in 0 ..< segmentCount {
-            if let segment = whisper_full_get_segment_text(context, index) {
-                text += String(cString: segment)
-            }
+            guard whisper_full_get_segment_no_speech_prob(context, index) < 0.5,
+                  let segment = whisper_full_get_segment_text(context, index)
+            else { continue }
+            text += String(cString: segment)
         }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }

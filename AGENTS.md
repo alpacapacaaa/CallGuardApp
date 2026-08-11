@@ -69,7 +69,7 @@ STOP 보고 형식: `[태스크 ID] 무엇을 하려 했나 / 무엇이 막혔�
 
 ```
 FileAudioSource(파일 재생, MVP 주경로) ─┐
-SCK(remote)/Mic(local) [Could, F-C4]  ─┤→ Session(트랙 태깅) → Preprocess(16kHz, VAD, 2s 청크)
+SCK(remote)/Mic(local) [Could, F-C4]  ─┤→ Session(트랙 태깅) → Preprocess(16kHz, VAD, 8s 청크)
                                                   → STT(whisper.cpp, 트랙별 인스턴스)
                                                   → Detection(RuleEngine → 경량 선형 분류기, 60s 윈도)
                                                   → AlertPolicy(0.5 주의 / 0.8 위험, 히스테리시스)

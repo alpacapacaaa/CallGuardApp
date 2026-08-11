@@ -15,12 +15,16 @@ public struct TrackTranscriber {
         pipeline = PreprocessPipeline(track: track)
     }
 
+    /// 무음 청크는 whisper에 넣지 않는다 — 침묵을 넣으면 관련 없는 텍스트를 지어내는
+    /// 할루시네이션이 발생함(실측: 실음성 10건 CER 93.1%, 원인은 청크 끝마다 "감사합니다" 등
+    /// 무관 텍스트 삽입). VAD(PreprocessPipeline)가 이미 계산해 둔 isSpeech를 게이트로 사용.
     public mutating func feed(_ chunk: AudioChunk) throws -> [TranscriptSegment] {
-        try pipeline.feed(chunk).map(segment)
+        try pipeline.feed(chunk).filter(\.isSpeech).map(segment)
     }
 
     public mutating func flush() throws -> TranscriptSegment? {
-        try pipeline.flush().map(segment)
+        guard let chunk = pipeline.flush(), chunk.isSpeech else { return nil }
+        return try segment(from: chunk)
     }
 
     private func segment(from chunk: PreprocessedChunk) throws -> TranscriptSegment {

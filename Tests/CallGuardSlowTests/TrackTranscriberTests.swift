@@ -1,5 +1,6 @@
 @testable import Capture
 import Foundation
+@testable import Preprocess
 @testable import STT
 import Testing
 
@@ -32,10 +33,15 @@ struct TrackTranscriberTests {
         var remote = try TrackTranscriber(track: .remote, engine: WhisperEngine(modelURL: modelURL, spec: spec))
         var local = try TrackTranscriber(track: .local, engine: WhisperEngine(modelURL: modelURL, spec: spec))
 
-        // 3초 톤 — feed()에서 2s 청크 1개, flush()에서 1s 잔여 청크 1개 → 트랙당 세그먼트 2개.
-        let samples = (0 ..< 48000).map { Float(sin(2 * Double.pi * 440 * Double($0) / 16000)) * 0.3 }
+        // chunkDuration×2.5 톤 — feed()에서 청크 2개, flush()에서 잔여 청크 1개 → 트랙당 세그먼트 3개.
+        let sampleRate = 16000
+        let totalDuration = PreprocessPipeline.chunkDuration * 2.5
+        let sampleCount = Int(Double(sampleRate) * totalDuration)
+        let samples = (0 ..< sampleCount).map {
+            Float(sin(2 * Double.pi * 440 * Double($0) / Double(sampleRate))) * 0.3
+        }
         let chunk = { (track: AudioTrack) in
-            AudioChunk(track: track, samples: samples, sampleRate: 16000, capturedAt: Date())
+            AudioChunk(track: track, samples: samples, sampleRate: sampleRate, capturedAt: Date())
         }
 
         var remoteSegments = try remote.feed(chunk(.remote))
@@ -47,8 +53,8 @@ struct TrackTranscriberTests {
             localSegments.append(last)
         }
 
-        #expect(remoteSegments.count == 2)
-        #expect(localSegments.count == 2)
+        #expect(remoteSegments.count == 3)
+        #expect(localSegments.count == 3)
         #expect(remoteSegments.allSatisfy { $0.track == .remote })
         #expect(localSegments.allSatisfy { $0.track == .local })
         #expect(remoteSegments.map(\.startTime) == remoteSegments.map(\.startTime).sorted())

@@ -33,12 +33,13 @@ struct PreprocessTests {
         #expect(VoiceActivityDetector.isSpeech([]) == false)
     }
 
-    @Test func chunksInto2sSegmentsWithAccurateTimestamps() {
-        // 5.0s의 48kHz 합성 톤을 100ms 캡처 청크(FileAudioSource 페이싱과 동일 단위)로 공급.
+    @Test func chunksIntoConfiguredDurationSegmentsWithAccurateTimestamps() {
+        // chunkDuration×2.5의 48kHz 합성 톤을 100ms 캡처 청크(FileAudioSource 페이싱과 동일 단위)로 공급.
         var pipeline = PreprocessPipeline(track: .remote)
         let sourceRate = 48000
         let sourceChunkFrames = Int(Double(sourceRate) * 0.1)
-        let totalFrames = sourceRate * 5
+        let chunkDuration = PreprocessPipeline.chunkDuration
+        let totalFrames = Int(Double(sourceRate) * chunkDuration * 2.5)
         var offset = 0
         var results: [PreprocessedChunk] = []
         while offset < totalFrames {
@@ -54,17 +55,18 @@ struct PreprocessTests {
             results.append(residual)
         }
 
-        // 5.0s = 2개 온전한 2s 청크 + 1.0s 잔여 청크.
+        // totalDuration(chunkDuration×2.5) = 2개 온전한 청크 + 0.5×chunkDuration 잔여 청크.
+        let targetRate = Double(PreprocessPipeline.targetSampleRate)
         #expect(results.count == 3)
-        #expect(results[0].samples.count == 32000)
-        #expect(results[1].samples.count == 32000)
-        #expect(results[2].samples.count == 16000)
+        #expect(results[0].samples.count == Int(chunkDuration * targetRate))
+        #expect(results[1].samples.count == Int(chunkDuration * targetRate))
+        #expect(results[2].samples.count == Int(chunkDuration * 0.5 * targetRate))
         let allAt16k = results.allSatisfy { $0.sampleRate == PreprocessPipeline.targetSampleRate }
         #expect(allAt16k)
         let allSpeech = results.allSatisfy(\.isSpeech)
         #expect(allSpeech)
 
-        let expectedStarts: [TimeInterval] = [0.0, 2.0, 4.0]
+        let expectedStarts: [TimeInterval] = [0.0, chunkDuration, chunkDuration * 2]
         for (result, expected) in zip(results, expectedStarts) {
             // DoD: 청크 경계 오차 ≤ 50ms.
             #expect(abs(result.startTime - expected) <= 0.05)
@@ -73,10 +75,11 @@ struct PreprocessTests {
 
     @Test func flushReturnsNilWhenNoResidual() {
         var pipeline = PreprocessPipeline(track: .local)
+        let exactChunkFrames = Int(PreprocessPipeline.chunkDuration * Double(PreprocessPipeline.targetSampleRate))
         let chunk = AudioChunk(
             track: .local,
-            samples: [Float](repeating: 0, count: 32000),
-            sampleRate: 16000,
+            samples: [Float](repeating: 0, count: exactChunkFrames),
+            sampleRate: PreprocessPipeline.targetSampleRate,
             capturedAt: Date()
         )
         let results = pipeline.feed(chunk)

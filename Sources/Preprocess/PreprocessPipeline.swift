@@ -6,7 +6,7 @@ import Foundation
 /// 잔여분은 flush()로 명시적으로 비운다.
 public struct PreprocessPipeline: Sendable {
     public static let targetSampleRate = 16000
-    public static let chunkDuration: TimeInterval = 2.0
+    public static let chunkDuration: TimeInterval = 8.0
 
     public let track: AudioTrack
     private let chunkFrames: Int

@@ -25,6 +25,10 @@ final class AppState {
     private(set) var isPlaying = false
     private(set) var transcriptLog: [TranscriptLogEntry] = []
     private(set) var captureStartTime: Date?
+    /// 화자(나/상대방) 분리 UI는 실시간 캡처에서만 의미가 있다 — 파일 재생은 마이크·시스템
+    /// 오디오 두 트랙이 실제로 나뉘어 들어오는 게 아니라 파일 전체가 항상 .remote 하나로만
+    /// 들어오므로, "상대방"이라고 라벨을 붙이는 게 실제 화자 분리처럼 오인되게 한다.
+    private(set) var isLiveCapture = false
 
     private var playbackTask: Task<Void, Never>?
     private var localCaptureTask: Task<Void, Never>?
@@ -55,19 +59,35 @@ final class AppState {
             statusMessage = "오디오 파싱 실패 — PCM WAV 형식인지 확인"
             return
         }
+        isLiveCapture = false
         begin(source: source, label: "재생 중: \(fileURL.lastPathComponent)")
     }
 
-    /// 실시간 통화 캡처(F-C4). 상대방 오디오(SystemAudioCapture, remote)는 탐지까지 수행하고,
+    /// 실시간 통화 캡처(F-C4). 상대방 오디오는 BlackHole(설치 시) 또는 SCK(폴백)로 캡처하고,
     /// 본인 마이크(MicAudioCapture, local)는 병렬로 전사만 해 화자 구분 표시에 쓴다 — rules.yaml
     /// 키워드가 전부 상대방(가해자) 발화 패턴이라 본인 트랙은 탐지 판정에 넣지 않는다.
+    /// BlackHole이 설치되어 있으면 전화 통화 오디오도 캡처 가능(SCK는 전화 오디오 캡처 불가).
     func startLiveCapture() {
-        begin(source: SystemAudioCapture(), label: "실시간 캡처 중")
+        isLiveCapture = true
+        let source: any AudioSource
+        if BlackHoleAudioCapture.isAvailable() {
+            source = BlackHoleAudioCapture()
+            debugLog("live capture using BlackHole", tag: "AppState")
+        } else {
+            source = SystemAudioCapture()
+            debugLog("live capture using SystemAudioCapture (BlackHole not detected)", tag: "AppState")
+        }
+        begin(source: source, label: "실시간 캡처 중")
         localCaptureTask = Task { [weak self] in
-            guard let mic = try? await MicAudioCapture() else { return }
-            await runTranscriptionOnlyPipeline(source: mic) { segment in
-                self?.appendLog(segment: segment, level: .none)
+            guard let mic = try? await MicAudioCapture() else {
+                self?.appendSystemNote("내 마이크 초기화 실패 — \"나\" 자막이 표시되지 않습니다")
+                return
             }
+            await runTranscriptionOnlyPipeline(
+                source: mic,
+                onStatus: { message in self?.appendSystemNote(message) },
+                onSegment: { segment in self?.appendLog(segment: segment, level: .none) }
+            )
         }
     }
 
@@ -97,7 +117,14 @@ final class AppState {
             await runPipeline(
                 source: source,
                 policyActor: policyActor,
-                onStatus: { message in self?.statusMessage = message },
+                // finish()가 세션 종료 직후 statusMessage를 "통화 종료 ..."로 곧바로 덮어써서,
+                // 여기서 온 실패 메시지는 화면에 사실상 한 프레임도 안 보이고 사라진다(실측 —
+                // 통화 도중 전사가 실패해도 "통화 종료 — 최종 판정: 정상"만 보여 실패 자체가
+                // 안 보였음). 로컬 트랙과 동일하게 자막 로그에도 남겨 스크롤로 확인 가능하게 한다.
+                onStatus: { message in
+                    self?.statusMessage = message
+                    self?.appendSystemNote(message, track: source.track)
+                },
                 onSegment: { segment, score, level in self?.handle(segment: segment, score: score, level: level) },
                 onFinished: { self?.finishNaturally() }
             )
@@ -128,6 +155,15 @@ final class AppState {
                 level: level, text: segment.text
             )
         )
+    }
+
+    /// 트랙 실패처럼 자막 자리에 아무것도 안 뜨는 것 말고는 신호가 없던 실패를 자막 로그
+    /// 안에 직접 남긴다 — statusMessage는 파이프라인이 끝나자마자 finish()가 곧바로 "통화
+    /// 종료" 메시지로 덮어써서 순간 스쳐 지나가지만, 자막 로그는 스크롤로 남아 사용자가
+    /// 놓치지 않는다. track은 실제 발화자가 아니라 어느 파이프라인(본인 마이크/상대방)에서
+    /// 난 문제인지 구분하는 용도.
+    private func appendSystemNote(_ text: String, track: AudioTrack = .local) {
+        transcriptLog.append(TranscriptLogEntry(track: track, timestamp: "-", level: .none, text: "⚠️ \(text)"))
     }
 
     func dismissAlert() {

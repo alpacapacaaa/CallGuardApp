@@ -41,7 +41,11 @@ public struct CautionBannerView: View {
         }
         .padding()
         .background(Color.orange.opacity(0.15))
-        .frame(width: 360)
+        // 고정 폭(360)을 강제하지 않고 부모가 준 폭에 맞춘다 — ControlPanelView(폭 340)처럼
+        // 더 좁은 컨테이너 안에 들어가면 고정 폭이 컨테이너보다 커져 전체 레이아웃이 중앙
+        // 정렬되며 왼쪽으로 밀려 보이는 문제가 있었다. 독립 렌더링(RenderUIStates)에서
+        // 필요한 고정 폭은 호출부에서 지정한다.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

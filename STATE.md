@@ -91,3 +91,28 @@ DoD "단발 추론 테스트 통과 + 해시 불일치 시 로드 거부 테스�
   4. **P4-T9(실기기 스모크+M8 사용성)는 운영자 전용** — 에이전트 대행 불가, CHECKPOINT-4 완결에 필수
   5. M1(121.1/215.3ms)·M3(1.000)·M6(0.130(정정, 아래 참조))·M7(cpu2.6%/mem499MB/drift-8.2%)·M9(0건) 5개 지표 전부 통과 — **에이전트 판정 가능 지표는 전부 목표 달성**
   Phase 5(P5-T1~T4)는 CHECKPOINT-4 통과 전까지 전부 블록 — 에이전트가 임의로 선진행하지 않음(plan.md 의존관계 준수)
+
+## 부록: 하네스 외부 세션 기록 (2026-08-12, F-C4 재시도 → 재보류)
+CHECKPOINT-4가 아직 운영자 판정 대기 상태인 채로, 별도 Claude Code 세션(AGENTS.md 루프·태스크 ID 미부여, 이 부록은 사후 기록용)에서 운영자가 F-C4(라이브 캡처, 2026-08-10 Could로 격하됨)를 CallGuardApp에 이미 붙어있던 코드(91ce70e, aa2ddfc) 위에서 직접 테스트. 실통화(아이폰 Continuity, Mac에서 수신) 중 상대방 음성이 전혀 감지되지 않는다는 보고로 시작해, 총 6단계 원인 조사:
+
+1. **VAD 오판정**
+2. **whisper.cpp Metal 초기화 레이스**
+3. **청크 1개 전사 실패가 세션 전체를 종료시킴**
+4. **에러가 나도 UI엔 항상 "통화 종료 — 정상"만 표시**
+5. **오디오 라우트 변경 후 탭이 조용히 멎음**
+6. **(미해결) BlackHole "상대방" 트랙이 통째로 무자막**
+**운영자가 여기서 F-C4를 포기하기로 결정**
+
+
+1. **VAD 오판정** — `PreprocessPipeline`이 8초 청크 전체 평균 에너지로 발화 여부를 판정해, 청크 안에 자연스러운 침묵이 섞이면 실제 발화도 무음으로 오판·whisper에 미전달. `VoiceActivityDetector.containsSpeech`(100ms 슬라이딩 윈도, 하나라도 임계값 초과 시 발화)로 교체. 회귀 테스트 추가(`containsSpeechDetectsBriefToneDilutedByLongSilence`).
+2. **whisper.cpp Metal 초기화 레이스** — 라이브 캡처는 상대방/본인 트랙용 `WhisperEngine`을 동시에 생성하는데, whisper의 Metal residency-set 지연 초기화가 스레드 안전하지 않아 한쪽이 영원히 멈춤(에러·크래시 없음). `sample`(macOS 내장 프로파일러)로 `__ggml_metal_rsets_init_block_invoke`가 재시도 루프에 갇힌 것을 직접 확인. `WhisperEngine.init`에 `NSLock`을 걸어 whisper 컨텍스트 생성을 프로세스 전체에서 직렬화해 해결.
+3. **청크 1개 전사 실패가 세션 전체를 종료시킴** — 캡처가 정확히 8초(첫 청크 상한)에서 끝나는 증상의 원인. `PipelineRunner.runPipeline`/`runTranscriptionOnlyPipeline`에서 청크 단위로 `do/catch` 분리, 실패한 청크만 건너뛰고 캡처는 계속하도록 수정.
+4. **에러가 나도 UI엔 항상 "통화 종료 — 정상"만 표시** — `AppState.finish()`가 세션 종료 시 상태 메시지를 무조건 덮어써서, 직전에 뜬 실패 메시지가 한 프레임도 안 보이고 사라짐. 원격 트랙 실패도 로컬 트랙과 동일하게 자막 로그에 ⚠️ 노트로 영구 기록하도록 수정(`appendSystemNote`에 `track` 파라미터 추가).
+5. **오디오 라우트 변경 후 탭이 조용히 멎음** — REC 타이머는 계속 돌지만 새 자막이 영영 안 뜨는 증상. macOS가 오디오 디바이스를 재구성할 때 보내는 `AVAudioEngineConfigurationChangeNotification`을 앱이 처리하지 않아, `AVAudioEngine`이 "실행 중" 상태로 남으면서도 탭에 버퍼를 더 이상 넘기지 않는 상태가 됨(Apple 문서가 명시하는 필수 대응이 기존 코드에 없었음). `MicAudioCapture`·`BlackHoleAudioCapture` 양쪽에 알림 구독 + 탭 재연결 로직 추가.
+6. **(미해결) BlackHole "상대방" 트랙이 통째로 무자막** — 1~5를 모두 고친 뒤 영상 재생(마이크가 스피커 소리를 우연히 주워 "나" 자막에 영상 대사가 찍힘 — 시스템 오디오가 실제로 흐르고 있었다는 증거)으로 재테스트했으나, 같은 시간 동안 BlackHole 경로("상대방")는 단 한 줄도 자막을 못 만듦. 진단 로그(`[BlackHole] device found/engine started/tap alive peak=...`)를 다시 심어 원인 확정 직전이었으나, **운영자가 여기서 F-C4를 포기하기로 결정** — 후속 조사 없이 세션 종료.
+
+**결정(운영자, 2026-08-12)**: F-C4는 다시 Could로 보류, MVP는 2026-08-10 결정대로 파일 재생 입력(`FileAudioSource`) 유지. CHECKPOINT-4 판정 자체에는 영향 없음(M1–M9는 전부 파일 입력 경로로 측정된 지표).
+
+**미커밋 변경분**: 이 세션에서 만든 코드 수정(1~5의 실제 수정 + 6의 임시 진단 로그)은 `git status` 기준 아직 워킹트리에만 있고 커밋되지 않음 — `Sources/CallGuardApp/{AppState,ControlPanelView,ControlPanelWindowController,PipelineRunner}.swift`, `Sources/Capture/{MicAudioCapture,BlackHoleAudioCapture}.swift`, `Sources/Preprocess/{PreprocessPipeline,VoiceActivityDetector}.swift`, `Sources/STT/WhisperEngine.swift`, `Tests/CallGuardFastTests/PreprocessTests.swift`. 1~5는 F-C4 재개 여부와 무관하게 그 자체로 유효한 안정성 수정(예: whisper 동시 초기화 레이스는 파일 재생 경로에서도 이론상 재현 가능)이라 유지 권장, 6의 진단용 `debugLog` 호출은 원인 미확정이라 제거 또는 보류 필요 — 다음 세션에서 운영자 판단.
+
+상세 트러블슈팅 서사·발표 자료용 정리는 `docs/presentation-inputs.md` 참조.

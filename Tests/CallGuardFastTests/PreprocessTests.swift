@@ -33,6 +33,24 @@ struct PreprocessTests {
         #expect(VoiceActivityDetector.isSpeech([]) == false)
     }
 
+    @Test func containsSpeechDetectsBriefToneDilutedByLongSilence() {
+        // 실제 통화는 문장 사이 무음이 길게 섞여 청크(최대 8s) 전체 평균 RMS를 임계값 아래로
+        // 희석시킬 수 있다 — isSpeech(전체 평균)는 이런 청크를 무음으로 오판해 whisper에
+        // 아예 안 넣는다. containsSpeech는 짧은 발화 구간 하나만 있어도 잡아내야 한다.
+        let rate = PreprocessPipeline.targetSampleRate
+        let windowFrames = VoiceActivityDetector.defaultWindowFrames
+        let silencePrefixFrames = windowFrames * 39 // 윈도우 경계에 정렬 — 발화가 한 윈도우 안에만 있게
+        let toneFrames = windowFrames
+        let totalFrames = Int(PreprocessPipeline.chunkDuration * Double(rate)) // 최대 청크 길이(8s)
+        let silenceSuffixFrames = totalFrames - silencePrefixFrames - toneFrames
+        let tone = (0 ..< toneFrames).map { Float(sin(2 * Double.pi * 440 * Double($0) / Double(rate))) * 0.1 }
+        let segment = [Float](repeating: 0, count: silencePrefixFrames) + tone
+            + [Float](repeating: 0, count: silenceSuffixFrames)
+
+        #expect(VoiceActivityDetector.isSpeech(segment) == false)
+        #expect(VoiceActivityDetector.containsSpeech(segment))
+    }
+
     @Test func chunksIntoConfiguredDurationSegmentsWithAccurateTimestamps() {
         // chunkDuration×2.5의 48kHz 합성 톤을 100ms 캡처 청크(FileAudioSource 페이싱과 동일 단위)로 공급.
         var pipeline = PreprocessPipeline(track: .remote)

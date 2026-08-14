@@ -56,8 +56,16 @@ struct ControlPanelView: View {
             }
         }
         .padding()
-        .frame(width: 340)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // minHeight를 넉넉하게 잡아 창이 처음부터 자막을 보여줄 공간을 확보한다 — 콘텐츠가
+        // 작을 때(대기 화면)만 딱 맞게 줄어들던 이전 방식은, 실시간 캡처 중 창이 비활성 상태일
+        // 때 자동 리사이즈가 곧바로 반영되지 않아 자막 칸이 아예 안 보이다가 "중지"를 눌러야
+        // (창과 다시 상호작용해야) 뒤늦게 펼쳐지는 문제가 있었다. 기본 높이를 넉넉히 잡아두면
+        // 그 리사이즈 타이밍에 기대지 않아도 된다.
+        // alignment: .leading — 지정 안 하면 기본값 .center라, 내부 콘텐츠가 이 폭보다
+        // 커지는 경우(예: 배너 폭 실수) 전체가 가운데 정렬되며 왼쪽으로 밀려 보이는 문제가
+        // 있었다. 왼쪽 고정으로 방어해 향후 폭 불일치가 생겨도 레이아웃이 안 흔들리게 한다.
+        .frame(width: 340, alignment: .leading)
+        .frame(minHeight: 600, alignment: .top)
     }
 
     private var transcriptView: some View {
@@ -65,12 +73,12 @@ struct ControlPanelView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(appState.transcriptLog) { entry in
-                        TranscriptBubble(entry: entry).id(entry.id)
+                        TranscriptBubble(entry: entry, showSpeakerLabel: appState.isLiveCapture).id(entry.id)
                     }
                 }
                 .padding(.vertical, 4)
             }
-            .frame(maxHeight: 220)
+            .frame(maxHeight: 400)
             .onChange(of: appState.transcriptLog.count) {
                 if let last = appState.transcriptLog.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -131,11 +139,15 @@ private struct PulsingDot: View {
 }
 
 /// 발화자별 말풍선 — 나(오른쪽·파랑) / 상대방(왼쪽·회색, 경고 시 주황·빨강 강조)으로 시각 분리.
+/// showSpeakerLabel이 false면(파일 재생) 이 구분을 아예 안 보여준다 — 파일 재생은 마이크·
+/// 시스템 오디오가 실제로 나뉘어 들어오는 게 아니라 항상 트랙 하나(.remote)뿐이라, "상대방"
+/// 라벨을 붙이면 진짜 화자 분리가 된 것처럼 오인시킨다.
 private struct TranscriptBubble: View {
     let entry: TranscriptLogEntry
+    let showSpeakerLabel: Bool
 
     private var isMe: Bool {
-        entry.track == .local
+        showSpeakerLabel && entry.track == .local
     }
 
     var body: some View {
@@ -144,9 +156,11 @@ private struct TranscriptBubble: View {
                 Spacer(minLength: 40)
             }
             VStack(alignment: isMe ? .trailing : .leading, spacing: 2) {
-                Text(isMe ? "나" : "상대방")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.secondary)
+                if showSpeakerLabel {
+                    Text(isMe ? "나" : "상대방")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
                 Text(entry.text)
                     .font(.caption)
                     .padding(.horizontal, 10)

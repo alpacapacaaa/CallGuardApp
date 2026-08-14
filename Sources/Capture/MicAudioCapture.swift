@@ -1,4 +1,6 @@
+import AudioToolbox
 import AVFoundation
+import CoreAudio
 import Foundation
 
 /// 마이크 TCC 권한 게이트 — AVAudioEngine inputNode 접근 전 반드시 경유해야 한다.
@@ -30,11 +32,25 @@ public struct MicAudioCapture: AudioSource {
     public let track = AudioTrack.local
     /// 허드웨어 네이티브 샘플레이트 — init 시점에 권한 확인 후 조회한다.
     public let sampleRate: Int
+    /// init 시점의 기본 입력 장치를 스냅샷으로 고정 — chunks() 실행 시점에 "지금 기본 입력이
+    /// 뭔지"를 다시 조회하지 않는다. BlackHoleAudioCapture와 동시에 실시간 캡처가 시작되면
+    /// 그쪽이 시스템 기본 입력을 BlackHole로 바꾸는데, 이 트랙이 매번 "현재 기본 입력"을
+    /// 다시 조회했을 때 그 전환 타이밍과 겹치면 포맷 불일치로 캡처가 실패하거나(실측:
+    /// captureFailed stage=micFormat) 최악의 경우 이 트랙이 실제로는 BlackHole을 잡아버려
+    /// "나" 자막이 상대방 오디오를 그대로 복제하는 문제가 실측으로 재현됐다. 장치 ID를 한 번
+    /// 고정해 AVAudioEngine 입력 노드를 그 장치에 직접 pin하면, 세션 도중 시스템 기본 입력이
+    /// 바뀌어도 이 트랙은 영향받지 않는다.
+    private let deviceID: AudioDeviceID
 
-    /// 권한 확인 → 입력 포맷 조회. 권한 없으면 여기서 typed error(inputNode 무접근).
+    /// 권한 확인 → 입력 장치 스냅샷 → 그 장치에 pin한 입력 포맷 조회. 권한 없으면 typed error.
     public init() async throws {
         try await MicPermission.ensureGranted()
+        guard let deviceID = getDefaultInputDeviceID() else {
+            throw CaptureError.captureFailed(detail: "stage=micInit code=noDefaultDevice")
+        }
+        self.deviceID = deviceID
         let engine = AVAudioEngine()
+        try Self.pin(engine.inputNode, to: deviceID)
         let format = engine.inputNode.inputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw CaptureError.captureFailed(detail: "stage=micInit code=noInputFormat")
@@ -45,7 +61,7 @@ public struct MicAudioCapture: AudioSource {
     /// 호출마다 새 캡처 세션을 시작한다. 소비자 취소·반복 종료 시 엔진도 정지된다.
     public func chunks() -> AsyncThrowingStream<AudioChunk, any Error> {
         AsyncThrowingStream(bufferingPolicy: .unbounded) { continuation in
-            let engine = MicCaptureEngine(continuation: continuation, sampleRate: sampleRate)
+            let engine = MicCaptureEngine(continuation: continuation, sampleRate: sampleRate, deviceID: deviceID)
             let startTask = Task {
                 do {
                     try await engine.start()
@@ -63,6 +79,26 @@ public struct MicAudioCapture: AudioSource {
             }
         }
     }
+
+    /// AVAudioEngine의 입력 노드를 특정 CoreAudio 장치에 고정한다 — 이후 시스템 기본 입력이
+    /// 바뀌어도(BlackHoleAudioCapture 등) 이 노드는 계속 지정한 장치만 캡처한다.
+    fileprivate static func pin(_ node: AVAudioInputNode, to deviceID: AudioDeviceID) throws {
+        guard let audioUnit = node.audioUnit else {
+            throw CaptureError.captureFailed(detail: "stage=micInit code=noAudioUnit")
+        }
+        var device = deviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &device,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        guard status == noErr else {
+            throw CaptureError.captureFailed(detail: "stage=micInit code=setDeviceFailed status=\(status)")
+        }
+    }
 }
 
 /// AVAudioEngine 수명주기 + 탭 버퍼 디코딩.
@@ -71,26 +107,58 @@ public struct MicAudioCapture: AudioSource {
 private final class MicCaptureEngine: @unchecked Sendable {
     private let continuation: AsyncThrowingStream<AudioChunk, any Error>.Continuation
     private let expectedSampleRate: Int
+    private let deviceID: AudioDeviceID
     private let lock = NSLock()
     private let engine = AVAudioEngine()
     private var accumulator: ChunkAccumulator
     private var stopped = false
+    /// 오디오 장치 재구성(라우트 변경) 시 AVAudioEngine이 탭에 더 이상 버퍼를 넘기지 않게
+    /// 되는 문제 대응 — deinit·stop()에서 해제해야 하므로 보관.
+    private var configChangeObserver: NSObjectProtocol?
 
-    init(continuation: AsyncThrowingStream<AudioChunk, any Error>.Continuation, sampleRate: Int) {
+    init(
+        continuation: AsyncThrowingStream<AudioChunk, any Error>.Continuation,
+        sampleRate: Int,
+        deviceID: AudioDeviceID
+    ) {
         self.continuation = continuation
         expectedSampleRate = sampleRate
+        self.deviceID = deviceID
         accumulator = ChunkAccumulator(track: .local, sampleRate: sampleRate)
     }
 
     deinit {
+        if let configChangeObserver {
+            NotificationCenter.default.removeObserver(configChangeObserver)
+        }
         engine.stop() // stop() 미경로 방치 방지 — 시작 안 한 엔진의 stop은 무해
     }
 
     func start() async throws {
         try await MicPermission.ensureGranted()
+        try installTapAndStart()
+
+        // 실통화 중 탭이 몇 초 뒤 조용히 죽는 문제가 실측으로 재현됐다 — 에러도 스트림 종료도
+        // 없이 handle()이 그냥 더 안 불림(REC는 계속 돌지만 새 자막이 안 뜸). 원인은 macOS가
+        // 통화 오디오 세션 협상 등으로 오디오 그래프를 재구성할 때 AVAudioEngine이 이 알림을
+        // 보내는데, 앱이 응답해서 탭을 다시 걸지 않으면 엔진은 "실행 중" 상태로 남아있지만
+        // 입력 노드가 더 이상 버퍼를 전달하지 않는다(Apple 문서가 명시하는 필수 대응 — 이전
+        // 코드에는 이 처리가 아예 없었음). 알림을 받으면 탭을 다시 걸고 엔진을 재시작한다.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { self.reconfigureAfterRouteChange() }
+        }
+    }
+
+    private func installTapAndStart() throws {
         let input = engine.inputNode
+        try MicAudioCapture.pin(input, to: deviceID)
         let format = input.inputFormat(forBus: 0)
-        // 세션 중 장치 변경으로 포맷이 달라지면 계약(sampleRate) 위반 — 명시 실패.
+        // init 스냅샷 이후로 이 장치 자체의 포맷이 바뀌었다면(예: 하드웨어 재구성) 계약
+        // (sampleRate) 위반 — 명시 실패. deviceID를 pin했으므로 "다른 장치가 기본이 됐다"는
+        // 이유로는 더 이상 여기 걸리지 않는다.
         guard Int(format.sampleRate) == expectedSampleRate, format.channelCount > 0 else {
             throw CaptureError.captureFailed(detail: "stage=micFormat code=mismatch")
         }
@@ -106,6 +174,23 @@ private final class MicCaptureEngine: @unchecked Sendable {
         }
     }
 
+    /// 라우트 변경 알림 후 탭을 다시 걸고 엔진을 재시작한다. 실패하면 조용히 멎어있는 것보다
+    /// 명시적으로 스트림을 끝내는 게 낫다(§5).
+    private func reconfigureAfterRouteChange() {
+        lock.lock()
+        let alreadyStopped = stopped
+        lock.unlock()
+        guard !alreadyStopped else { return }
+
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        do {
+            try installTapAndStart()
+        } catch {
+            continuation.finish(throwing: error)
+        }
+    }
+
     /// 엔진 정지 + 잔여 버퍼(<100ms) 방출. 중복 호출 안전.
     func stop() {
         lock.lock()
@@ -116,6 +201,10 @@ private final class MicCaptureEngine: @unchecked Sendable {
         stopped = true
         lock.unlock()
 
+        if let configChangeObserver {
+            NotificationCenter.default.removeObserver(configChangeObserver)
+            self.configChangeObserver = nil
+        }
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
 

@@ -38,5 +38,5 @@ let dangerScore = RiskScore(value: 0.9, category: .threatUrgency, evidence: evid
 let dangerVM = AlertViewModel(level: .danger, score: dangerScore)
 
 try await renderPNG(view: MenuBarStateView(viewModel: noneVM), to: "\(outputDir)/menubar-none.png")
-try await renderPNG(view: CautionBannerView(viewModel: cautionVM), to: "\(outputDir)/caution-banner.png")
+try await renderPNG(view: CautionBannerView(viewModel: cautionVM).frame(width: 360), to: "\(outputDir)/caution-banner.png")
 try await renderPNG(view: DangerPanelView(viewModel: dangerVM), to: "\(outputDir)/danger-panel.png")

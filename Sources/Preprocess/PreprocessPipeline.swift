@@ -72,7 +72,7 @@ public struct PreprocessPipeline: Sendable {
             samples: segment,
             sampleRate: Self.targetSampleRate,
             startTime: Double(emittedFrames) / Double(Self.targetSampleRate),
-            isSpeech: VoiceActivityDetector.isSpeech(segment)
+            isSpeech: VoiceActivityDetector.containsSpeech(segment)
         )
     }
 }

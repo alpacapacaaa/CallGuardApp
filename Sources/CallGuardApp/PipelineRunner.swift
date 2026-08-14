@@ -94,17 +94,33 @@ func runPipeline(
     var detection = DetectionEngine(ruleEngine: context.ruleEngine, classifier: context.classifier)
 
     do {
+        // 세그먼트 하나의 전사 실패(예: whisper_full 내부 오류)가 캡처 루프 전체를 끊으면
+        // 안 된다 — 실측: 통화 8초쯤 임의의 한 청크에서 전사가 실패하자 그 예외가 for-await
+        // 루프를 그대로 빠져나가 caught되면서 세션 전체가 "통화 종료"로 끝나버렸다(사용자
+        // 입장에선 원인 불명으로 캡처가 8초 만에 멎는 것처럼 보임). 실패한 청크만 건너뛰고
+        // 캡처는 계속한다.
         for try await chunk in source.chunks() {
-            for segment in try transcriber.feed(chunk) {
+            let segments: [TranscriptSegment]
+            do {
+                segments = try transcriber.feed(chunk)
+            } catch {
+                await onStatus("세그먼트 전사 실패(계속 진행): \(error)")
+                continue
+            }
+            for segment in segments {
                 let score = detection.evaluate(adding: segment)
                 let level = await policyActor.update(with: score)
                 await onSegment(segment, score, level)
             }
         }
-        if let residual = try transcriber.flush() {
-            let score = detection.evaluate(adding: residual)
-            let level = await policyActor.update(with: score)
-            await onSegment(residual, score, level)
+        do {
+            if let residual = try transcriber.flush() {
+                let score = detection.evaluate(adding: residual)
+                let level = await policyActor.update(with: score)
+                await onSegment(residual, score, level)
+            }
+        } catch {
+            await onStatus("마지막 구간 전사 실패: \(error)")
         }
     } catch let error as CaptureError {
         if let guidance = PermissionGuidance.from(error) {
@@ -113,7 +129,7 @@ func runPipeline(
             await onStatus("캡처 실패: \(error)")
         }
     } catch {
-        await onStatus("재생/전사 실패: \(error)")
+        await onStatus("캡처 실패: \(error)")
     }
 
     await onFinished()
@@ -121,26 +137,53 @@ func runPipeline(
 
 /// 로컬(본인) 트랙 전용 — 전사만 하고 탐지에는 넣지 않는다(rules.yaml 키워드가 상대방 발화
 /// 패턴이라 본인 트랙에서 매칭될 근거가 없음). 화자 분리(F-S1 계열) 표시용.
+/// onStatus는 실패를 UI에 드러내기 위한 것 — 예전에는 실패를 통째로 삼켜서, 이 트랙이
+/// 초기화나 전사 중 조용히 죽어도 "나" 쪽 자막이 하나도 안 뜨는 것 말고는 아무 신호가 없어
+/// 화자 분리가 안 되는 것처럼 보이는 문제가 있었다.
 func runTranscriptionOnlyPipeline(
     source: any AudioSource,
+    onStatus: @escaping @MainActor (String) -> Void,
     onSegment: @escaping @MainActor (TranscriptSegment) -> Void
 ) async {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-    guard let context = try? loadPipelineContext(root: root),
-          let engine = try? WhisperEngine(modelURL: context.modelURL, spec: context.sttSpec)
-    else { return }
+    guard let context = try? loadPipelineContext(root: root) else {
+        await onStatus("내 음성 인식 설정 실패 — \"나\" 자막이 표시되지 않습니다")
+        return
+    }
+    guard let engine = try? WhisperEngine(modelURL: context.modelURL, spec: context.sttSpec) else {
+        await onStatus("내 음성 인식 엔진 초기화 실패 — \"나\" 자막이 표시되지 않습니다")
+        return
+    }
 
     var transcriber = TrackTranscriber(track: source.track, engine: engine)
     do {
         for try await chunk in source.chunks() {
-            for segment in try transcriber.feed(chunk) {
+            let segments: [TranscriptSegment]
+            do {
+                segments = try transcriber.feed(chunk)
+            } catch {
+                await onStatus("내 음성 세그먼트 전사 실패(계속 진행): \(error)")
+                continue
+            }
+            for segment in segments {
                 await onSegment(segment)
             }
         }
-        if let residual = try transcriber.flush() {
-            await onSegment(residual)
+        do {
+            if let residual = try transcriber.flush() {
+                await onSegment(residual)
+            }
+        } catch {
+            await onStatus("내 마지막 구간 전사 실패: \(error)")
+        }
+    } catch let error as CaptureError {
+        if let guidance = PermissionGuidance.from(error) {
+            await onStatus("내 마이크: \(guidance.title) \(guidance.instruction)")
+        } else {
+            await onStatus("내 마이크 캡처 실패: \(error)")
         }
     } catch {
-        // 로컬 트랙은 보조 정보 — 실패해도 원격 트랙 세션은 계속 진행한다.
+        // 로컬 트랙은 보조 정보 — 실패해도 원격 트랙 세션은 계속 진행하되, 실패 자체는 알린다.
+        await onStatus("내 음성 인식 실패: \(error)")
     }
 }
